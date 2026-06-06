@@ -1,22 +1,28 @@
 # 扫码手机访问插件
 
-这是 `mobile_tunnel` 插件的承载骨架，用于后续实现基于 Cloudflare TryCloudflare / Quick Tunnels 的临时公网访问入口。
+这是 N.E.K.O 的 `mobile_tunnel` 插件目录，可作为源码复制到 N.E.K.O 插件目录，或通过打包后的 `.neko-plugin` 文件导入。
 
-当前状态：
+## 内容
 
-- 已内置 Windows amd64 版 `cloudflared.exe`。
-- 已附带 Apache-2.0 许可证文本、第三方组件说明和版本哈希记录。
-- 插件默认不会自动启动公网隧道，需要在面板中手动点击“启动分享”。
-- 已实现基础 MVP：启动/停止 TryCloudflare 隧道、生成二维码、刷新 token、手机只读状态页。
+- `plugin.toml`：插件元数据、入口和面板声明。
+- `__init__.py`：插件后端逻辑，负责启动临时访问入口、本地网关、确认页和空闲停止。
+- `ui/panel.tsx`：插件面板。
+- `i18n/`：多语言文案。
+- `vendor/cloudflared/`：内置 `cloudflared.exe` 及第三方许可记录。
+- `LICENSE`：插件本体的 Apache License 2.0 许可证。
 
-后续实现时请优先遵守：
+## 运行说明
 
-- 默认不要自动启动公网隧道。
-- 不要直接代理 N.E.K.O 主服务或插件管理器。
-- 只暴露受 token 保护的手机端网关和白名单 API。
-- 启动隧道后必须在 UI 中明确显示状态，并提供一键停止。
-- 修改内置 `cloudflared.exe` 时必须同步更新 `vendor/cloudflared/VERSION.txt` 中的版本、来源和 SHA256。
+插件默认不会自动启动公网访问入口。用户需要在面板中点击“启动分享”，扫描二维码并在手机确认页点击进入按钮后，才会打开手机访问页面。
 
-更多设计记录见：
+使用结束后可以在面板中点击“停止分享”。如果需要让旧二维码失效，可以点击“刷新二维码”。
 
-`docs/zh-CN/plugins/mobile-tunnel-notes.txt`
+## 第三方组件
+
+本插件内置 Windows amd64 版 `cloudflared.exe`。替换该文件时，必须同步更新：
+
+- `vendor/cloudflared/VERSION.txt`
+- `vendor/cloudflared/THIRD_PARTY_NOTICES.txt`
+- `vendor/cloudflared/licenses/`
+
+请在重新发布前校验 `VERSION.txt` 中记录的 SHA256。
