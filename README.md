@@ -45,6 +45,12 @@ N.E.K.O 扫码手机访问插件。它通过内置的 `cloudflared` 创建临时
 - 第三方声明：见 `mobile_tunnel/vendor/cloudflared/THIRD_PARTY_NOTICES.txt`
 - cloudflared 许可证：见 `mobile_tunnel/vendor/cloudflared/licenses/`
 
+## 免责声明
+
+本插件不是 Cloudflare 官方产品，也不代表 Cloudflare 对本插件提供认可、赞助或背书。`Cloudflare`、`cloudflared` 及相关名称归其各自权利人所有。
+
+使用 Cloudflare Quick Tunnels 时，请遵守 Cloudflare 适用的服务条款和使用政策。
+
 ## 许可证
 
 本插件使用 Apache License 2.0。

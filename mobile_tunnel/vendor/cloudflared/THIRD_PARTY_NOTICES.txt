@@ -35,5 +35,7 @@ Redistribution Notes
 --------------------
 - The bundled executable is provided as a third-party binary.
 - The plugin does not claim ownership of cloudflared.
+- Bundling cloudflared does not imply endorsement, sponsorship, or approval by Cloudflare.
+- Cloudflare, cloudflared, and related names belong to their respective owners.
 - The version, source URL, and SHA256 checksum are recorded in VERSION.txt.
 - Keep the license text and this notice with the executable when redistributing the plugin.
