@@ -1,0 +1,18 @@
+Component: cloudflared
+Vendor: Cloudflare
+Project: https://github.com/cloudflare/cloudflared
+Release: 2026.5.2
+Release page: https://github.com/cloudflare/cloudflared/releases/tag/2026.5.2
+Downloaded asset: cloudflared-windows-amd64.exe
+Downloaded from: https://github.com/cloudflare/cloudflared/releases/download/2026.5.2/cloudflared-windows-amd64.exe
+Local path: vendor/cloudflared/windows-amd64/cloudflared.exe
+Release published: 2026-05-27T10:45:00Z
+Recorded on: 2026-06-06
+SHA256: 20b9638f685333d623798e733effbad2487093f15ba592f6c7752360ff3b7ab7
+License: Apache License 2.0
+License file: vendor/cloudflared/licenses/LICENSE-cloudflared-Apache-2.0.txt
+
+Notes:
+- This binary is redistributed as a third-party component.
+- Keep this file updated whenever replacing the bundled executable.
+- Verify SHA256 before shipping or running a newly bundled executable.

@@ -1,0 +1,39 @@
+Third-Party Component Notice
+============================
+
+Component
+---------
+cloudflared
+
+Publisher
+---------
+Cloudflare
+
+Purpose
+-------
+The mobile_tunnel plugin bundles cloudflared to create temporary Cloudflare Quick Tunnels without requiring users to download the executable separately.
+
+Source
+------
+Project:
+https://github.com/cloudflare/cloudflared
+
+Release:
+https://github.com/cloudflare/cloudflared/releases/tag/2026.5.2
+
+Bundled asset:
+https://github.com/cloudflare/cloudflared/releases/download/2026.5.2/cloudflared-windows-amd64.exe
+
+License
+-------
+cloudflared is licensed under the Apache License 2.0.
+
+The bundled license text is stored at:
+vendor/cloudflared/licenses/LICENSE-cloudflared-Apache-2.0.txt
+
+Redistribution Notes
+--------------------
+- The bundled executable is provided as a third-party binary.
+- The plugin does not claim ownership of cloudflared.
+- The version, source URL, and SHA256 checksum are recorded in VERSION.txt.
+- Keep the license text and this notice with the executable when redistributing the plugin.

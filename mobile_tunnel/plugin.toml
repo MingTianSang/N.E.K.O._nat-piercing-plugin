@@ -1,0 +1,37 @@
+[plugin]
+id = "mobile_tunnel"
+name = "扫码手机访问"
+description = "通过临时链接，为 N.E.K.O 提供受控的扫码手机访问入口。"
+short_description = "为 N.E.K.O 创建临时二维码手机访问入口。"
+keywords = ["手机", "二维码", "公网访问", "cloudflare", "trycloudflare", "tunnel"]
+passive = true
+version = "0.1.0"
+entry = "plugin.plugins.mobile_tunnel:MobileTunnelPlugin"
+
+[plugin.author]
+name = "N.E.K.O Team"
+
+[plugin.sdk]
+recommended = ">=0.1.0,<0.2.0"
+supported = ">=0.1.0,<0.3.0"
+
+[plugin.i18n]
+default_locale = "zh-CN"
+locales_dir = "i18n"
+
+[plugin.ui]
+enabled = true
+
+[[plugin.ui.panel]]
+id = "main"
+title = "扫码手机访问"
+entry = "ui/panel.tsx"
+context = "dashboard"
+permissions = ["state:read", "action:call"]
+
+[plugin_runtime]
+enabled = true
+auto_start = false
+
+[plugin.store]
+enabled = false
