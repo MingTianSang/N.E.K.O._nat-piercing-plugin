@@ -908,6 +908,8 @@ class MobileTunnelPlugin(NekoPluginBase):
         safe_enter_button = html.escape(self._t("mobile.enterButton", locale=locale))
         safe_hint = html.escape(self._t("mobile.hint", locale=locale))
         safe_cache_tip = html.escape(self._t("mobile.cacheTip", locale=locale))
+        safe_network_tip = html.escape(self._t("mobile.networkTip", locale=locale).strip())
+        network_tip_html = f'<p class="network-tip">{safe_network_tip}</p>' if safe_network_tip else ""
         return f"""<!doctype html>
 <html lang="{safe_lang}">
 <head>
@@ -930,6 +932,7 @@ class MobileTunnelPlugin(NekoPluginBase):
     .enter {{ display: inline-flex; align-items: center; justify-content: center; width: 100%; min-height: 48px; border-radius: 8px; background: #24476f; color: #fff; font-weight: 800; text-decoration: none; }}
     .hint {{ margin-top: 14px; font-size: 13px; color: #697386; }}
     .cache-tip {{ margin-top: 14px; padding: 12px; border-radius: 8px; background: #f3f6fb; color: #536071; font-size: 13px; }}
+    .network-tip {{ margin-top: 14px; padding: 12px; border-radius: 8px; background: #fff5df; color: #71501e; font-size: 13px; }}
   </style>
 </head>
 <body>
@@ -945,6 +948,7 @@ class MobileTunnelPlugin(NekoPluginBase):
       </div>
       <a class="enter" href="{enter_url}">{safe_enter_button}</a>
       <p class="hint">{safe_hint}</p>
+      {network_tip_html}
       <p class="cache-tip">{safe_cache_tip}</p>
     </section>
   </main>

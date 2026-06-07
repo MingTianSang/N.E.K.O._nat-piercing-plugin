@@ -17,6 +17,7 @@
   "panel.vendor.missing": "Falta",
   "panel.warning.public": "El acceso público está activo. Compártelo solo con dispositivos confiables y detenlo al terminar.",
   "panel.warning.cache": "Nota de caché: este enlace público temporal puede cambiar a una dirección nueva cada vez que reinicias el uso compartido. El navegador móvil puede tratar la dirección nueva como un sitio nuevo y descargar recursos otra vez. Si ocupa espacio después de usarlo, borra la caché o los datos del sitio temporal relacionado desde los ajustes del navegador móvil.",
+  "panel.warning.network": "",
   "panel.share.runningTitle": "Escanear para acceder",
   "panel.share.startTitle": "Iniciar uso compartido",
   "panel.share.description": "Al iniciar se crea un enlace HTTPS temporal y un código QR. Tras confirmar, se abre la página nativa del proyecto.",
@@ -101,5 +102,6 @@
   "mobile.accessType.native": "Página nativa de N.E.K.O",
   "mobile.enterButton": "Entrar en la página móvil de N.E.K.O",
   "mobile.hint": "Si no reconoces esta entrada, cierra la página y detén el uso compartido desde el panel del plugin en el PC.",
-  "mobile.cacheTip": "Nota de caché: este enlace temporal puede cambiar a una dirección nueva cada vez que se reinicia el uso compartido. El navegador del teléfono puede tratarla como un sitio nuevo y volver a descargar recursos. Si aumenta el uso de almacenamiento, borra la caché o los datos del sitio temporal relacionado en los ajustes del navegador."
+  "mobile.cacheTip": "Nota de caché: este enlace temporal puede cambiar a una dirección nueva cada vez que se reinicia el uso compartido. El navegador del teléfono puede tratarla como un sitio nuevo y volver a descargar recursos. Si aumenta el uso de almacenamiento, borra la caché o los datos del sitio temporal relacionado en los ajustes del navegador.",
+  "mobile.networkTip": ""
 }

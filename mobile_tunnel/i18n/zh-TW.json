@@ -17,6 +17,7 @@
   "panel.vendor.missing": "缺失",
   "panel.warning.public": "公網訪問已開啟。請只分享給可信裝置，使用完及時停止。",
   "panel.warning.cache": "快取提示：臨時公網連結每次重新啟動都可能換成新地址，手機瀏覽器會把新地址當成新網站並重新下載資源。使用完如果佔用空間，可在手機瀏覽器的網站設定中清理相關臨時網站的快取或網站資料。",
+  "panel.warning.network": "網路提示：目前方案使用 Cloudflare 臨時通道。部分國內網路可能連線較慢、無法開啟，晚高峰或網路壅塞時也可能不穩定。",
   "panel.share.runningTitle": "掃碼訪問",
   "panel.share.startTitle": "啟動分享",
   "panel.share.description": "啟動後會建立一個臨時 HTTPS 連結，並產生掃碼手機訪問 QR Code。確認後會進入專案原生頁面。",
@@ -101,5 +102,6 @@
   "mobile.accessType.native": "N.E.K.O 原生頁面",
   "mobile.enterButton": "進入 N.E.K.O 手機頁面",
   "mobile.hint": "如果你不認識這個入口，請關閉頁面，並在電腦端外掛面板停止分享。",
-  "mobile.cacheTip": "快取提示：這個臨時連結每次重新啟動都可能換成新地址，手機瀏覽器會把新地址當成新網站並重新下載資源。使用完如果佔用空間，可以在瀏覽器網站設定裡清理相關臨時網站的快取或網站資料。"
+  "mobile.cacheTip": "快取提示：這個臨時連結每次重新啟動都可能換成新地址，手機瀏覽器會把新地址當成新網站並重新下載資源。使用完如果佔用空間，可以在瀏覽器網站設定裡清理相關臨時網站的快取或網站資料。",
+  "mobile.networkTip": "網路提示：目前方案使用 Cloudflare 臨時通道。部分國內網路可能連線較慢、無法開啟，晚高峰或網路壅塞時也可能不穩定。"
 }

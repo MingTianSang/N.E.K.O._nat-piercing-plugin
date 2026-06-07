@@ -17,6 +17,7 @@
   "panel.vendor.missing": "Ausente",
   "panel.warning.public": "O acesso público está ativo. Compartilhe apenas com dispositivos confiáveis e pare ao terminar.",
   "panel.warning.cache": "Nota de cache: este link público temporário pode mudar para um novo endereço sempre que o compartilhamento for reiniciado. O navegador móvel pode tratar o novo endereço como um novo site e baixar recursos novamente. Se isso ocupar espaço após o uso, limpe o cache ou os dados do site temporário relacionado nas configurações do navegador móvel.",
+  "panel.warning.network": "",
   "panel.share.runningTitle": "Escanear para acessar",
   "panel.share.startTitle": "Iniciar compartilhamento",
   "panel.share.description": "Ao iniciar, um link HTTPS temporário e um QR code são criados. Após confirmar, a página nativa do projeto é aberta.",
@@ -101,5 +102,6 @@
   "mobile.accessType.native": "Página nativa do N.E.K.O",
   "mobile.enterButton": "Entrar na página móvel do N.E.K.O",
   "mobile.hint": "Se você não reconhece esta entrada, feche a página e pare o compartilhamento pelo painel do plugin no PC.",
-  "mobile.cacheTip": "Nota de cache: este link temporário pode mudar para um novo endereço sempre que o compartilhamento reiniciar. O navegador do telefone pode tratar o novo endereço como um novo site e baixar recursos novamente. Se o armazenamento aumentar após o uso, limpe o cache ou os dados do site temporário relacionado nas configurações do navegador."
+  "mobile.cacheTip": "Nota de cache: este link temporário pode mudar para um novo endereço sempre que o compartilhamento reiniciar. O navegador do telefone pode tratar o novo endereço como um novo site e baixar recursos novamente. Se o armazenamento aumentar após o uso, limpe o cache ou os dados do site temporário relacionado nas configurações do navegador.",
+  "mobile.networkTip": ""
 }

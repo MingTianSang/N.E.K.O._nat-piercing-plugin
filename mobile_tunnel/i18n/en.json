@@ -17,6 +17,7 @@
   "panel.vendor.missing": "Missing",
   "panel.warning.public": "Public access is enabled. Share it only with trusted devices and stop it when finished.",
   "panel.warning.cache": "Cache note: this temporary public link may change to a new address each time sharing restarts. Your mobile browser may treat the new address as a new site and download resources again. If storage grows after use, clear the related temporary site's cache or site data in the mobile browser settings.",
+  "panel.warning.network": "",
   "panel.share.runningTitle": "Scan to Access",
   "panel.share.startTitle": "Start Sharing",
   "panel.share.description": "Starting creates a temporary HTTPS link and QR code. After confirmation, it opens the native project page.",
@@ -101,5 +102,6 @@
   "mobile.accessType.native": "N.E.K.O native page",
   "mobile.enterButton": "Enter N.E.K.O mobile page",
   "mobile.hint": "If you do not recognize this entry, close the page and stop sharing from the desktop plugin panel.",
-  "mobile.cacheTip": "Cache note: this temporary link may change to a new address each time sharing restarts. Your mobile browser may treat the new address as a new site and download resources again. If storage grows after use, clear the related temporary site cache or site data in browser settings."
+  "mobile.cacheTip": "Cache note: this temporary link may change to a new address each time sharing restarts. Your mobile browser may treat the new address as a new site and download resources again. If storage grows after use, clear the related temporary site cache or site data in browser settings.",
+  "mobile.networkTip": ""
 }

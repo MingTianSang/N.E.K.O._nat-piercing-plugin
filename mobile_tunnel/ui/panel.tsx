@@ -253,6 +253,7 @@ export default function MobileTunnelPanel(props: PluginSurfaceProps<MobileTunnel
   const statusTone = safeState.status === "error" ? "danger" : running ? "success" : safeState.status === "starting" ? "warning" : "primary"
   const displayedMobileUrl = mobileUrlVisible ? compactMobileUrl(safeState.mobile_url) : maskMobileUrl(safeState.mobile_url)
   const idleStopValue = running ? (safeState.idle_locked ? t("panel.stats.idleLocked") : formatRemaining(t, safeState.idle_remaining_seconds)) : "-"
+  const networkWarning = t("panel.warning.network").trim()
 
   return (
     <Page title={t("panel.title")} subtitle={t("panel.subtitle")}>
@@ -272,6 +273,7 @@ export default function MobileTunnelPanel(props: PluginSurfaceProps<MobileTunnel
       {safeState.error ? <Alert tone="danger">{safeState.error}</Alert> : null}
       {safeState.message ? <Alert tone={running ? "warning" : "primary"}>{safeState.message}</Alert> : null}
       {running ? <Alert tone="warning">{t("panel.warning.public")}</Alert> : null}
+      {networkWarning ? <Alert tone="warning">{networkWarning}</Alert> : null}
       <Alert tone="primary">{t("panel.warning.cache")}</Alert>
 
       <Grid cols={2}>
