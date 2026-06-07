@@ -28,6 +28,10 @@ CLOUDFLARED_SHA256 = "20b9638f685333d623798e733effbad2487093f15ba592f6c7752360ff
 TRYCLOUDFLARE_URL_RE = re.compile(r"https://[A-Za-z0-9-]+\.trycloudflare\.com")
 START_TIMEOUT_SECONDS = 45
 DEFAULT_IDLE_TIMEOUT_MINUTES = 10
+TAILSCALE_STATUS_CACHE_SECONDS = 15
+TAILSCALE_FUNNEL_HTTPS_PORT = 10000
+TAILSCALE_DOWNLOAD_URL = "https://tailscale.com/download/windows"
+TAILSCALE_FUNNEL_DOCS_URL = "https://tailscale.com/docs/features/tailscale-funnel"
 SESSION_COOKIE_NAME = "neko_mobile_tunnel_session"
 HOP_BY_HOP_HEADERS = {
     "connection",
@@ -57,6 +61,7 @@ class MobileTunnelPlugin(NekoPluginBase):
         self._started_at: float | None = None
         self._public_url: str | None = None
         self._mobile_url: str | None = None
+        self._tunnel_provider: str | None = None
         self._qr_data_url: str | None = None
         self._qr_png: bytes | None = None
         self._gateway_port: int | None = None
@@ -76,6 +81,8 @@ class MobileTunnelPlugin(NekoPluginBase):
         self._active_mobile_websockets: int = 0
         self._mobile_enter_count: int = 0
         self._target_base_url = f"http://127.0.0.1:{MAIN_SERVER_PORT}"
+        self._tailscale_status_cache: dict[str, Any] | None = None
+        self._tailscale_status_checked_at: float = 0.0
 
     def _t(self, key: str, *, locale: str | None = None, default: str = "", **params: object) -> str:
         return self.i18n.t(key, locale=locale, default=default, **params)
@@ -90,6 +97,7 @@ class MobileTunnelPlugin(NekoPluginBase):
 
     @lifecycle(id="startup")
     async def startup(self, **_):
+        self.register_static_ui("static")
         self._status = "idle"
         self._last_message = self._t("messages.ready")
         return Ok({"status": self._status, "message": self._last_message})
@@ -109,6 +117,7 @@ class MobileTunnelPlugin(NekoPluginBase):
     @ui.context(id="dashboard", title=tr("panel.title", default="Mobile Tunnel"))
     async def dashboard(self):
         await self._refresh_dead_process()
+        await self._refresh_tailscale_status()
         return self._build_status_payload(include_qr=True)
 
     @ui.action(
@@ -165,6 +174,7 @@ class MobileTunnelPlugin(NekoPluginBase):
                 return Err(SdkError(self._error))
 
             self._public_url = public_url.rstrip("/")
+            self._tunnel_provider = "cloudflare"
             self._mobile_url = f"{self._public_url}/s/{self._token}"
             self._qr_png = self._make_qr_png(self._mobile_url)
             self._qr_data_url = self._make_qr_data_url(self._qr_png)
@@ -174,6 +184,80 @@ class MobileTunnelPlugin(NekoPluginBase):
 
             host = urlparse(self._public_url).hostname or "trycloudflare"
             self.logger.info("MobileTunnel started: port={} host={}", self._gateway_port, host)
+            payload = self._build_status_payload(include_qr=True)
+            payload["summary"] = self._t("messages.mobileUrlCreated")
+            return Ok(payload)
+
+    @ui.action(
+        id="start_tailscale_funnel",
+        label=tr("panel.tailscale.actions.start", default="Start Funnel"),
+        tone="success",
+        group="tailscale",
+        order=35,
+        refresh_context=True,
+    )
+    @plugin_entry(
+        id="start_tailscale_funnel",
+        name=tr("entries.tailscaleStart.name", default="Start Tailscale Funnel"),
+        description=tr("entries.tailscaleStart.description", default="Start the local mobile gateway and expose it through Tailscale Funnel."),
+        input_schema={"type": "object", "properties": {}},
+        llm_result_fields=["summary", "mobile_url"],
+    )
+    async def start_tailscale_funnel(self, **_):
+        async with self._lock:
+            if self._is_tunnel_active():
+                return Ok(self._build_status_payload(include_qr=True))
+
+            await self._stop_tunnel_locked(clear_message=True)
+            status = await self._refresh_tailscale_status(force=True)
+            if not status.get("installed"):
+                self._status = "error"
+                self._error = self._t("messages.tailscaleMissing")
+                return Err(SdkError(self._error))
+            if not status.get("logged_in") or not status.get("dns_name"):
+                self._status = "error"
+                self._error = self._t("errors.tailscaleNotReady")
+                return Err(SdkError(self._error))
+
+            tailscale = self._resolve_tailscale()
+            if tailscale is None:
+                self._status = "error"
+                self._error = self._t("messages.tailscaleMissing")
+                return Err(SdkError(self._error))
+
+            self._status = "starting"
+            self._error = None
+            self._last_message = self._t("messages.startingGateway")
+            self._token = secrets.token_urlsafe(32)
+            self._session_cookie_value = secrets.token_urlsafe(32)
+            self._started_at = time.time()
+            self._idle_last_activity_at = self._started_at
+            self._idle_locked_by_mobile_session = False
+            self._tunnel_provider = "tailscale"
+
+            try:
+                await self._start_gateway_locked()
+                await self._start_tailscale_funnel_locked(tailscale)
+                public_url = self._tailscale_public_url(status)
+                if not public_url:
+                    raise RuntimeError(self._t("errors.tailscaleNoUrl"))
+            except Exception as exc:
+                await self._stop_tunnel_locked(clear_message=False)
+                self._status = "error"
+                self._error = self._format_start_error(exc)
+                return Err(SdkError(self._error))
+
+            self._public_url = public_url.rstrip("/")
+            self._tunnel_provider = "tailscale"
+            self._mobile_url = f"{self._public_url}/s/{self._token}"
+            self._qr_png = self._make_qr_png(self._mobile_url)
+            self._qr_data_url = self._make_qr_data_url(self._qr_png)
+            self._status = "running"
+            self._last_message = self._t("messages.tailscaleFunnelStarted")
+            self._idle_task = asyncio.create_task(self._stop_when_idle())
+
+            host = urlparse(self._public_url).hostname or "tailscale"
+            self.logger.info("MobileTunnel Tailscale Funnel started: port={} host={}", self._gateway_port, host)
             payload = self._build_status_payload(include_qr=True)
             payload["summary"] = self._t("messages.mobileUrlCreated")
             return Ok(payload)
@@ -260,6 +344,34 @@ class MobileTunnelPlugin(NekoPluginBase):
         status["summary"] = self._t("messages.vendorReady") if status["ready"] else self._t("messages.vendorMissing")
         return Ok(status)
 
+    @ui.action(
+        id="get_tailscale_status",
+        label=tr("panel.tailscale.actions.check", default="Check Tailscale"),
+        tone="primary",
+        group="tailscale",
+        order=40,
+        refresh_context=True,
+    )
+    @plugin_entry(
+        id="get_tailscale_status",
+        name=tr("entries.tailscale.name", default="Check Tailscale"),
+        description=tr("entries.tailscale.description", default="Check whether Tailscale is installed and ready for Funnel."),
+        input_schema={"type": "object", "properties": {"start_funnel": {"type": "boolean"}}},
+        llm_result_fields=["summary", "installed", "logged_in"],
+    )
+    async def get_tailscale_status(self, **_):
+        if bool(_.get("start_funnel")):
+            return await self.start_tailscale_funnel()
+
+        status = await self._refresh_tailscale_status(force=True)
+        if not status.get("installed"):
+            status["summary"] = self._t("messages.tailscaleMissing")
+        elif not status.get("logged_in"):
+            status["summary"] = self._t("messages.tailscaleNeedsLogin")
+        else:
+            status["summary"] = self._t("messages.tailscaleReady")
+        return Ok(status)
+
     async def _resolve_cloudflared(self) -> Path | None:
         bundled = self._vendor_root / "windows-amd64" / "cloudflared.exe"
         if sys.platform.startswith("win") and bundled.is_file():
@@ -332,6 +444,34 @@ class MobileTunnelPlugin(NekoPluginBase):
         self._stderr_task = asyncio.create_task(self._read_cloudflared_stream(self._process.stderr))
         self._watch_task = asyncio.create_task(self._watch_cloudflared(self._process))
 
+    async def _start_tailscale_funnel_locked(self, tailscale: Path) -> None:
+        if not self._gateway_port:
+            raise RuntimeError(self._t("errors.gatewayNotStarted"))
+
+        target = f"http://127.0.0.1:{self._gateway_port}"
+        kwargs: dict[str, Any] = {
+            "stdout": asyncio.subprocess.PIPE,
+            "stderr": asyncio.subprocess.PIPE,
+            "cwd": str(self.config_dir),
+        }
+        if os.name == "nt":
+            kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+
+        self._process = await asyncio.create_subprocess_exec(
+            str(tailscale),
+            "funnel",
+            f"--https={TAILSCALE_FUNNEL_HTTPS_PORT}",
+            "--yes",
+            target,
+            **kwargs,
+        )
+        self._stdout_task = asyncio.create_task(self._read_cloudflared_stream(self._process.stdout))
+        self._stderr_task = asyncio.create_task(self._read_cloudflared_stream(self._process.stderr))
+        self._watch_task = asyncio.create_task(self._watch_cloudflared(self._process))
+        await asyncio.sleep(1.2)
+        if self._process.returncode is not None:
+            raise RuntimeError(self._last_cloudflared_lines[-1] if self._last_cloudflared_lines else self._t("errors.tailscaleStartFailed"))
+
     async def _read_cloudflared_stream(self, stream: asyncio.StreamReader | None) -> None:
         if stream is None:
             return
@@ -356,15 +496,19 @@ class MobileTunnelPlugin(NekoPluginBase):
         returncode = await process.wait()
         if self._process is not process:
             return
+        exit_error = self._process_exit_error(returncode)
         if self._url_future and not self._url_future.done():
-            self._url_future.set_exception(RuntimeError(self._t("errors.cloudflaredExited", returncode=returncode)))
+            self._url_future.set_exception(RuntimeError(exit_error))
             return
         async with self._lock:
             if self._process is process and self._status == "running":
+                provider = self._tunnel_provider
                 self._status = "error"
-                self._error = self._t("errors.cloudflaredExited", returncode=returncode)
+                self._error = exit_error
                 self._last_message = self._error
                 await self._stop_gateway_locked()
+                if provider == "tailscale":
+                    await self._turn_off_tailscale_funnel()
                 self._clear_tunnel_state_after_process_exit()
 
     async def _stop_when_idle(self) -> None:
@@ -388,10 +532,13 @@ class MobileTunnelPlugin(NekoPluginBase):
     async def _refresh_dead_process(self) -> None:
         async with self._lock:
             if self._process is not None and self._process.returncode is not None and self._status == "running":
+                provider = self._tunnel_provider
                 self._status = "error"
-                self._error = self._t("errors.cloudflaredExited", returncode=self._process.returncode)
+                self._error = self._process_exit_error(self._process.returncode)
                 self._last_message = self._error
                 await self._stop_gateway_locked()
+                if provider == "tailscale":
+                    await self._turn_off_tailscale_funnel()
                 self._clear_tunnel_state_after_process_exit()
 
     async def _stop_tunnel_locked(self, *, clear_message: bool) -> None:
@@ -407,13 +554,17 @@ class MobileTunnelPlugin(NekoPluginBase):
                 setattr(self, task_name, None)
 
         process = self._process
+        provider = self._tunnel_provider
         self._process = None
         if process is not None and process.returncode is None:
             await self._terminate_process(process)
+        if provider == "tailscale":
+            await self._turn_off_tailscale_funnel()
 
         await self._stop_gateway_locked()
         self._public_url = None
         self._mobile_url = None
+        self._tunnel_provider = None
         self._qr_data_url = None
         self._qr_png = None
         self._token = None
@@ -487,6 +638,20 @@ class MobileTunnelPlugin(NekoPluginBase):
         if runner is not None:
             await runner.cleanup()
 
+    async def _turn_off_tailscale_funnel(self) -> None:
+        tailscale = self._resolve_tailscale()
+        if tailscale is None:
+            return
+        await asyncio.to_thread(
+            self._run_tailscale_command,
+            tailscale,
+            "funnel",
+            f"--https={TAILSCALE_FUNNEL_HTTPS_PORT}",
+            "--yes",
+            "off",
+            timeout=8,
+        )
+
     def _clear_tunnel_state_after_process_exit(self) -> None:
         current_task = asyncio.current_task()
         for task_name in ("_idle_task",):
@@ -497,6 +662,7 @@ class MobileTunnelPlugin(NekoPluginBase):
         self._process = None
         self._public_url = None
         self._mobile_url = None
+        self._tunnel_provider = None
         self._qr_data_url = None
         self._qr_png = None
         self._token = None
@@ -532,6 +698,7 @@ class MobileTunnelPlugin(NekoPluginBase):
             "status_label": self._status_label(),
             "public_url": self._public_url if running else None,
             "mobile_url": self._mobile_url if running else None,
+            "tunnel_provider": self._tunnel_provider if running else None,
             "qr_code_url": self._qr_image_url(local_gateway_url) if include_qr and running else None,
             "qr_code_data_url": self._qr_data_url if include_qr and running else None,
             "local_gateway_url": local_gateway_url,
@@ -546,8 +713,121 @@ class MobileTunnelPlugin(NekoPluginBase):
             "idle_timeout_minutes": DEFAULT_IDLE_TIMEOUT_MINUTES,
             "cloudflared_version": CLOUDFLARED_VERSION,
             "vendor": self._vendor_status(include_hash=False),
+            "tailscale": self._tailscale_status_cache or self._empty_tailscale_status(),
             "error": self._error,
             "message": self._last_message,
+        }
+
+    def _empty_tailscale_status(self) -> dict[str, Any]:
+        return {
+            "installed": False,
+            "path": "",
+            "version": "",
+            "backend_state": "",
+            "logged_in": False,
+            "login_name": "",
+            "dns_name": "",
+            "funnel_ready": False,
+            "error": "",
+            "download_url": TAILSCALE_DOWNLOAD_URL,
+            "funnel_docs_url": TAILSCALE_FUNNEL_DOCS_URL,
+        }
+
+    async def _refresh_tailscale_status(self, *, force: bool = False) -> dict[str, Any]:
+        now = time.time()
+        if (
+            not force
+            and self._tailscale_status_cache is not None
+            and now - self._tailscale_status_checked_at < TAILSCALE_STATUS_CACHE_SECONDS
+        ):
+            return self._tailscale_status_cache
+
+        status = await asyncio.to_thread(self._tailscale_status)
+        self._tailscale_status_cache = status
+        self._tailscale_status_checked_at = time.time()
+        return status
+
+    def _tailscale_status(self) -> dict[str, Any]:
+        payload = self._empty_tailscale_status()
+        tailscale = self._resolve_tailscale()
+        if tailscale is None:
+            return payload
+
+        payload["installed"] = True
+        payload["path"] = str(tailscale)
+        version = self._run_tailscale_command(tailscale, "version", timeout=2.5)
+        if version["ok"]:
+            payload["version"] = (version["stdout"].splitlines() or [""])[0].strip()
+
+        status = self._run_tailscale_command(tailscale, "status", "--json", timeout=3.5)
+        if not status["ok"]:
+            payload["error"] = status["stderr"] or status["stdout"]
+            return payload
+
+        try:
+            data = json.loads(status["stdout"])
+        except json.JSONDecodeError as exc:
+            payload["error"] = f"tailscale status json parse failed: {exc}"
+            return payload
+
+        backend_state = str(data.get("BackendState") or "")
+        self_node = data.get("Self") if isinstance(data.get("Self"), dict) else {}
+        user_map = data.get("User") if isinstance(data.get("User"), dict) else {}
+        user_id = self_node.get("UserID")
+        user_info = user_map.get(str(user_id), {}) if user_id is not None else {}
+        if not isinstance(user_info, dict):
+            user_info = {}
+        login_name = str(user_info.get("LoginName") or user_info.get("DisplayName") or self_node.get("LoginName") or user_id or "")
+        dns_name = str(self_node.get("DNSName") or "").rstrip(".")
+        payload["backend_state"] = backend_state
+        payload["login_name"] = login_name
+        payload["dns_name"] = dns_name
+        payload["logged_in"] = backend_state.lower() == "running" and bool(self_node)
+        payload["funnel_ready"] = bool(payload["logged_in"] and dns_name)
+        return payload
+
+    def _tailscale_public_url(self, status: dict[str, Any]) -> str | None:
+        dns_name = str(status.get("dns_name") or "").strip().rstrip(".")
+        if not dns_name:
+            return None
+        if TAILSCALE_FUNNEL_HTTPS_PORT == 443:
+            return f"https://{dns_name}"
+        return f"https://{dns_name}:{TAILSCALE_FUNNEL_HTTPS_PORT}"
+
+    def _resolve_tailscale(self) -> Path | None:
+        found = shutil.which("tailscale")
+        if found:
+            return Path(found)
+
+        candidates = [
+            Path(os.environ.get("ProgramFiles", "")) / "Tailscale" / "tailscale.exe",
+            Path(os.environ.get("ProgramFiles(x86)", "")) / "Tailscale" / "tailscale.exe",
+            Path(os.environ.get("LocalAppData", "")) / "Tailscale" / "tailscale.exe",
+        ]
+        for candidate in candidates:
+            if candidate.is_file():
+                return candidate
+        return None
+
+    def _run_tailscale_command(self, tailscale: Path, *args: str, timeout: float) -> dict[str, Any]:
+        try:
+            completed = subprocess.run(
+                [str(tailscale), *args],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout,
+                check=False,
+                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+            )
+        except Exception as exc:
+            return {"ok": False, "stdout": "", "stderr": str(exc)}
+        return {
+            "ok": completed.returncode == 0,
+            "stdout": completed.stdout.strip(),
+            "stderr": completed.stderr.strip(),
+            "returncode": completed.returncode,
         }
 
     def _status_label(self, *, locale: str | None = None) -> str:
@@ -566,6 +846,11 @@ class MobileTunnelPlugin(NekoPluginBase):
         if self._error:
             return self._error
         return self._t("messages.statusIdle")
+
+    def _process_exit_error(self, returncode: int | None) -> str:
+        if self._tunnel_provider == "tailscale":
+            return self._t("errors.tailscaleExited", returncode=returncode)
+        return self._t("errors.cloudflaredExited", returncode=returncode)
 
     def _format_start_error(self, exc: Exception) -> str:
         if isinstance(exc, asyncio.TimeoutError):
@@ -908,7 +1193,8 @@ class MobileTunnelPlugin(NekoPluginBase):
         safe_enter_button = html.escape(self._t("mobile.enterButton", locale=locale))
         safe_hint = html.escape(self._t("mobile.hint", locale=locale))
         safe_cache_tip = html.escape(self._t("mobile.cacheTip", locale=locale))
-        safe_network_tip = html.escape(self._t("mobile.networkTip", locale=locale).strip())
+        network_tip_text = self._t("mobile.networkTip", locale=locale).strip() if self._tunnel_provider == "cloudflare" else ""
+        safe_network_tip = html.escape(network_tip_text)
         network_tip_html = f'<p class="network-tip">{safe_network_tip}</p>' if safe_network_tip else ""
         return f"""<!doctype html>
 <html lang="{safe_lang}">
