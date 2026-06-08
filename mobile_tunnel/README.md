@@ -13,9 +13,45 @@
 
 ## 运行说明
 
-插件默认不会自动启动公网访问入口。用户需要在面板中点击“启动分享”，扫描二维码并在手机确认页点击进入按钮后，才会打开手机访问页面。Tailscale Funnel 方案配置完成后，也是在 Tailscale Funnel 页点击“启动 Funnel”，插件会显示二维码、隐藏链接、复制链接、刷新二维码和停止按钮。
+插件默认不会自动启动公网访问入口。用户需要在面板中选择访问方案并点击启动按钮，扫描二维码并在手机确认页点击进入按钮后，才会打开手机访问页面。
+
+目前面板提供三种方案：
+
+- Cloudflare 临时隧道：内置 `cloudflared.exe`，不需要用户单独下载，适合快速一键使用。
+- Tailscale Funnel：需要用户先安装并登录 Tailscale，适合已有 Tailscale 环境的用户。
+- cpolar 国内隧道：需要用户先安装 cpolar 并配置认证 token，适合国内网络优先的用户。
 
 使用结束后可以在面板中点击“停止分享”。如果需要让旧二维码失效，可以点击“刷新二维码”。
+
+## cpolar 准备教程
+
+cpolar 方案和内置的 Cloudflare 临时隧道不同，它需要用户先安装 cpolar 客户端并配置账号 token。准备完成后，插件会启动本地手机网关，并通过 cpolar 创建 HTTPS 访问入口；插件不会自动安装 cpolar，也不会读取或显示用户 token。
+
+官方资料：
+
+- cpolar 下载页：https://www.cpolar.com/download
+- cpolar token 页面：https://dashboard.cpolar.com/auth
+- cpolar 文档：https://www.cpolar.com/docs
+
+### 步骤 1：安装 cpolar
+
+打开 cpolar 官方下载页，下载并安装 Windows 客户端。安装完成后，回到插件面板的 cpolar 国内隧道页，点击“检测安装”，插件会自动检测本机是否已经安装 cpolar。
+
+> 配图区域：cpolar 下载页和安装完成后的状态检查。
+
+### 步骤 2：配置认证 token
+
+打开 cpolar token 页面，复制自己的认证 token，粘贴到插件面板里的 token 输入框，然后点击“保存 token”。插件会自动把 token 写入默认配置文件。插件只会检查配置文件中是否存在 token，不会显示 token 内容。
+
+> 配图区域：cpolar token 页面和插件内 token 保存区域。
+
+### 步骤 3：回到插件重新检测
+
+确保本插件处于启动状态，然后回到插件面板的 cpolar 国内隧道页，点击“重新检测”。检测通过后点击“启动 cpolar”。插件会启动本地手机网关，并显示二维码、隐藏链接、复制链接、刷新二维码和停止按钮。
+
+免费版通常为随机地址和 1Mbps 带宽，且账号同时在线进程数有限；如果电脑上已经有其他 cpolar 进程在运行，插件启动可能失败。
+
+> 配图区域：插件中检测成功后的状态卡片。
 
 ## Tailscale Funnel 准备教程
 

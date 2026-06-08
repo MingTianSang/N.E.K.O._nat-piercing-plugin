@@ -1,15 +1,16 @@
 # N.E.K.O. NAT Piercing Plugin
 
-N.E.K.O 扫码手机访问插件。它通过内置的 `cloudflared` 创建临时二维码访问入口，让用户扫码后在手机浏览器打开本机 N.E.K.O，并提供确认页、链接隐藏、复制、刷新和空闲自动停止机制。
+N.E.K.O 扫码手机访问插件。它可以通过 Cloudflare 临时隧道、Tailscale Funnel 或 cpolar 创建二维码访问入口，让用户扫码后在手机浏览器打开本机 N.E.K.O，并提供确认页、链接隐藏、复制、刷新和空闲自动停止机制。
 
 ## 功能
 
-- 生成临时 HTTPS 访问链接和二维码。
+- 生成 HTTPS 访问链接和二维码。
+- 支持 Cloudflare 临时隧道、Tailscale Funnel 和 cpolar 国内隧道三种方案。
 - 手机访问前显示确认页，避免误扫后直接进入。
 - 链接默认隐藏，可手动显示或复制。
 - 支持刷新二维码，使旧链接立即失效。
 - 手机进入前长时间空闲会自动停止分享入口。
-- 内置 Windows amd64 版 `cloudflared.exe`，无需用户额外下载。
+- 内置 Windows amd64 版 `cloudflared.exe`，Cloudflare 临时隧道方案无需用户额外下载。
 - 插件面板和手机确认页支持多语言本地化。
 
 ## 安装
@@ -38,7 +39,7 @@ N.E.K.O 扫码手机访问插件。它通过内置的 `cloudflared` 创建临时
 
 ## 第三方组件
 
-本插件内置 Cloudflare 的 `cloudflared`，用于创建 Cloudflare Quick Tunnels。
+本插件内置 Cloudflare 的 `cloudflared`，用于创建 Cloudflare Quick Tunnels。Tailscale Funnel 和 cpolar 方案需要用户自行安装并登录对应客户端，插件不会内置或代替用户安装这些客户端。
 
 - 项目地址：https://github.com/cloudflare/cloudflared
 - 内置版本：见 `mobile_tunnel/vendor/cloudflared/VERSION.txt`
@@ -47,9 +48,9 @@ N.E.K.O 扫码手机访问插件。它通过内置的 `cloudflared` 创建临时
 
 ## 免责声明
 
-本插件不是 Cloudflare 官方产品，也不代表 Cloudflare 对本插件提供认可、赞助或背书。`Cloudflare`、`cloudflared` 及相关名称归其各自权利人所有。
+本插件不是 Cloudflare、Tailscale 或 cpolar 官方产品，也不代表这些服务对本插件提供认可、赞助或背书。相关名称归其各自权利人所有。
 
-使用 Cloudflare Quick Tunnels 时，请遵守 Cloudflare 适用的服务条款和使用政策。
+使用 Cloudflare Quick Tunnels、Tailscale Funnel 或 cpolar 时，请遵守对应服务适用的服务条款和使用政策。
 
 ## 许可证
 

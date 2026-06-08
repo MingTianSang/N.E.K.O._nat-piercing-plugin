@@ -42,11 +42,26 @@ type TailscaleStatus = {
   funnel_docs_url?: string
 }
 
+type CpolarStatus = {
+  installed?: boolean
+  path?: string
+  version?: string
+  authenticated?: boolean
+  config_path?: string
+  region?: string
+  error?: string
+  download_url?: string
+  dashboard_url?: string
+  auth_url?: string
+  docs_url?: string
+}
+
 type TailscaleGuideStepData = {
   title: string
   body: string
   image: string
   imageUrls?: string[]
+  extraContent?: any
   codeLabel?: string
   code?: string
   copyCodeLabel?: string
@@ -54,6 +69,12 @@ type TailscaleGuideStepData = {
   actionUrl?: string
   secondaryActionLabel?: string
   secondaryActionUrl?: string
+  actionButtonLabel?: string
+  actionButtonPendingLabel?: string
+  actionButtonTone?: any
+  actionButtonDisabled?: boolean
+  actionButtonPending?: boolean
+  onActionButtonClick?: () => void
 }
 
 type MobileTunnelState = {
@@ -77,6 +98,7 @@ type MobileTunnelState = {
   cloudflared_version?: string
   vendor?: VendorStatus
   tailscale?: TailscaleStatus
+  cpolar?: CpolarStatus
   error?: string | null
   message?: string | null
 }
@@ -88,6 +110,10 @@ const TAILSCALE_FUNNEL_DOCS_URL = "https://tailscale.com/docs/features/tailscale
 const TAILSCALE_ACCESS_CONTROLS_URL = "https://login.tailscale.com/admin/acls/file"
 const TAILSCALE_DNS_SETTINGS_URL = "https://login.tailscale.com/admin/dns"
 const TAILSCALE_TUTORIAL_IMAGE_BASE = "/plugin/mobile_tunnel/ui/tutorial"
+const CPOLAR_DOWNLOAD_URL = "https://www.cpolar.com/download"
+const CPOLAR_AUTH_URL = "https://dashboard.cpolar.com/auth"
+const CPOLAR_DOCS_URL = "https://www.cpolar.com/docs"
+const CPOLAR_TUTORIAL_IMAGE_BASE = "/plugin/mobile_tunnel/ui/tutorial"
 const TAILSCALE_FUNNEL_POLICY_TEMPLATE = `// Example/default ACLs for unrestricted connections.
 {
   // Declare static groups of users. Use autogroups for all users or users with a specific role.
@@ -304,6 +330,7 @@ function TailscaleGuideStep(props: {
   body: string
   image: string
   imageUrls?: string[]
+  extraContent?: any
   codeLabel?: string
   code?: string
   copyCodeLabel?: string
@@ -311,6 +338,12 @@ function TailscaleGuideStep(props: {
   actionUrl?: string
   secondaryActionLabel?: string
   secondaryActionUrl?: string
+  actionButtonLabel?: string
+  actionButtonPendingLabel?: string
+  actionButtonTone?: any
+  actionButtonDisabled?: boolean
+  actionButtonPending?: boolean
+  onActionButtonClick?: () => void
   onOpenUrl: (url?: string | null) => void
   onCopyCode?: (code: string) => void
 }) {
@@ -356,6 +389,7 @@ function TailscaleGuideStep(props: {
           </Button>
         </Field>
       ) : null}
+      {props.extraContent || null}
       {imageUrls.length > 0 ? (
         <div style={{ display: "grid", gap: "8px", minWidth: 0 }}>
           {imageUrls.length > 1 ? (
@@ -440,6 +474,17 @@ function TailscaleGuideStep(props: {
           </ButtonGroup>
         </div>
       ) : null}
+      {props.actionButtonLabel && props.onActionButtonClick ? (
+        <div style={{ justifySelf: "start", alignSelf: "start", maxWidth: "100%" }}>
+          <Button
+            tone={props.actionButtonTone || "primary"}
+            disabled={!!props.actionButtonDisabled || !!props.actionButtonPending}
+            onClick={props.onActionButtonClick}
+          >
+            {props.actionButtonPending ? (props.actionButtonPendingLabel || props.actionButtonLabel) : props.actionButtonLabel}
+          </Button>
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -451,11 +496,16 @@ export default function MobileTunnelPanel(props: PluginSurfaceProps<MobileTunnel
   const vendorReady = safeState.vendor?.ready !== false
   const toast = useToast()
   const confirm = useConfirm()
-  const [activeTab, setActiveTab] = useState<"cloudflare" | "tailscale">("cloudflare")
+  const [activeTab, setActiveTab] = useState<"cloudflare" | "tailscale" | "cpolar">("cloudflare")
   const [mobileUrlVisible, setMobileUrlVisible] = useState(false)
   const [startPending, setStartPending] = useState(false)
   const [tailscaleStartPending, setTailscaleStartPending] = useState(false)
   const [tailscaleCheckPending, setTailscaleCheckPending] = useState(false)
+  const [cpolarStartPending, setCpolarStartPending] = useState(false)
+  const [cpolarCheckPending, setCpolarCheckPending] = useState(false)
+  const [cpolarAuthPending, setCpolarAuthPending] = useState(false)
+  const [cpolarAuthToken, setCpolarAuthToken] = useState("")
+  const cpolarAuthInputRef = useRef<HTMLInputElement | null>(null)
   const manualMobileModeToastKeyRef = useRef("")
 
   useEffect(() => {
@@ -581,6 +631,58 @@ export default function MobileTunnelPanel(props: PluginSurfaceProps<MobileTunnel
     }
   }
 
+  async function startCpolarTunnel() {
+    if (cpolarStartPending) return
+    setCpolarStartPending(true)
+    const closeStartingToast = toast.info(t("panel.cpolar.toast.starting"), { timeout: STARTING_TOAST_TIMEOUT_MS })
+    try {
+      await props.api.call("get_cpolar_status", { start_cpolar: true })
+      await props.api.refresh()
+      closeStartingToast()
+      toast.success(t("panel.cpolar.toast.started"))
+    } catch (error) {
+      closeStartingToast()
+      toast.error(error instanceof Error ? error.message : String(error))
+    } finally {
+      setCpolarStartPending(false)
+    }
+  }
+
+  async function refreshCpolarStatus() {
+    if (cpolarCheckPending) return
+    setCpolarCheckPending(true)
+    try {
+      await props.api.call("get_cpolar_status", {})
+      await props.api.refresh()
+      toast.success(t("panel.cpolar.toast.checked"))
+    } catch (error) {
+      toast.error(t("panel.cpolar.toast.checkFailed"))
+    } finally {
+      setCpolarCheckPending(false)
+    }
+  }
+
+  async function saveCpolarAuthToken() {
+    const token = (cpolarAuthInputRef.current?.value || cpolarAuthToken).trim()
+    if (!token || cpolarAuthPending) return
+    setCpolarAuthPending(true)
+    try {
+      await props.api.call("get_cpolar_status", { auth_token: token })
+      setCpolarAuthToken("")
+      await props.api.refresh()
+      toast.success(t("panel.cpolar.toast.authSaved"))
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t("panel.cpolar.toast.authFailed"))
+    } finally {
+      setCpolarAuthPending(false)
+    }
+  }
+
+  function handleCpolarAuthTokenInput(event: any) {
+    const target = event?.currentTarget || event?.target
+    setCpolarAuthToken(String(target?.value || ""))
+  }
+
   function toggleMobileUrlVisible() {
     setMobileUrlVisible((value) => !value)
   }
@@ -595,8 +697,12 @@ export default function MobileTunnelPanel(props: PluginSurfaceProps<MobileTunnel
   const statusTone = safeState.status === "error" ? "danger" : running ? "success" : safeState.status === "starting" ? "warning" : "primary"
   const displayedMobileUrl = mobileUrlVisible ? compactMobileUrl(safeState.mobile_url) : maskMobileUrl(safeState.mobile_url)
   const tunnelProvider = safeState.tunnel_provider || ""
+  const cloudflareRunning = running && tunnelProvider === "cloudflare"
+  const otherTunnelRunningForCloudflare = running && tunnelProvider && tunnelProvider !== "cloudflare"
   const tailscaleRunning = running && tunnelProvider === "tailscale"
+  const cpolarRunning = running && tunnelProvider === "cpolar"
   const otherTunnelRunning = running && tunnelProvider && tunnelProvider !== "tailscale"
+  const otherTunnelRunningForCpolar = running && tunnelProvider && tunnelProvider !== "cpolar"
   const idleStopValue = running ? (safeState.idle_locked ? t("panel.stats.idleLocked") : formatRemaining(t, safeState.idle_remaining_seconds)) : "-"
   const networkWarning = t("panel.warning.network").trim()
   const tailscale = safeState.tailscale || {}
@@ -649,6 +755,81 @@ export default function MobileTunnelPanel(props: PluginSurfaceProps<MobileTunnel
       imageUrls: [`${TAILSCALE_TUTORIAL_IMAGE_BASE}/07-plugin-check.png`],
     },
   ]
+  const cpolar = safeState.cpolar || {}
+  const cpolarInstalled = !!cpolar.installed
+  const cpolarAuthenticated = !!cpolar.authenticated
+  const cpolarReady = cpolarInstalled && cpolarAuthenticated
+  const cpolarGuide = !cpolarInstalled
+    ? t("panel.cpolar.installGuide")
+    : cpolarAuthenticated
+      ? t("panel.cpolar.readyGuide")
+      : t("panel.cpolar.authGuide")
+  const cpolarGuideSteps: TailscaleGuideStepData[] = [
+    {
+      title: t("panel.cpolar.guide.install.title"),
+      body: t("panel.cpolar.guide.install.body"),
+      image: t("panel.cpolar.guide.install.image"),
+      imageUrls: [
+        `${CPOLAR_TUTORIAL_IMAGE_BASE}/08-cpolar-download-page.png`,
+        `${CPOLAR_TUTORIAL_IMAGE_BASE}/09-cpolar-check-install.png`,
+      ],
+      actionLabel: t("panel.cpolar.guide.install.action"),
+      actionUrl: cpolar.download_url || CPOLAR_DOWNLOAD_URL,
+      actionButtonLabel: t("panel.cpolar.guide.install.confirm"),
+      actionButtonPendingLabel: t("panel.cpolar.actions.checking"),
+      actionButtonTone: "primary",
+      actionButtonDisabled: cpolarCheckPending,
+      actionButtonPending: cpolarCheckPending,
+      onActionButtonClick: refreshCpolarStatus,
+    },
+    {
+      title: t("panel.cpolar.guide.auth.title"),
+      body: t("panel.cpolar.guide.auth.body"),
+      image: t("panel.cpolar.guide.auth.image"),
+      imageUrls: [
+        `${CPOLAR_TUTORIAL_IMAGE_BASE}/10-cpolar-token-page.png`,
+        `${CPOLAR_TUTORIAL_IMAGE_BASE}/11-cpolar-save-token.png`,
+      ],
+      extraContent: (
+        <div style={{ display: "grid", gap: "8px", minWidth: 0 }}>
+          <input
+            ref={cpolarAuthInputRef}
+            type="password"
+            value={cpolarAuthToken}
+            placeholder={t("panel.cpolar.guide.auth.placeholder")}
+            onInput={handleCpolarAuthTokenInput}
+            onChange={handleCpolarAuthTokenInput}
+            style={{
+              width: "100%",
+              minHeight: "38px",
+              boxSizing: "border-box",
+              border: "1px solid #c8d5e3",
+              borderRadius: "7px",
+              padding: "0 10px",
+              color: "#172033",
+              background: "#ffffff",
+            }}
+          />
+          <div style={{ justifySelf: "start" }}>
+            <Button tone="primary" disabled={!cpolarAuthToken.trim() || cpolarAuthPending} onClick={saveCpolarAuthToken}>
+              {cpolarAuthPending ? t("panel.cpolar.guide.auth.saving") : t("panel.cpolar.guide.auth.save")}
+            </Button>
+          </div>
+        </div>
+      ),
+      actionLabel: t("panel.cpolar.guide.auth.action"),
+      actionUrl: cpolar.auth_url || CPOLAR_AUTH_URL,
+    },
+    {
+      title: t("panel.cpolar.guide.check.title"),
+      body: t("panel.cpolar.guide.check.body"),
+      image: t("panel.cpolar.guide.check.image"),
+      imageUrls: [
+        `${CPOLAR_TUTORIAL_IMAGE_BASE}/12-cpolar-status-check.png`,
+        `${CPOLAR_TUTORIAL_IMAGE_BASE}/13-cpolar-running.png`,
+      ],
+    },
+  ]
 
   return (
     <Page title={t("panel.title")} subtitle={t("panel.subtitle")}>
@@ -682,6 +863,15 @@ export default function MobileTunnelPanel(props: PluginSurfaceProps<MobileTunnel
         >
           {t("panel.tabs.tailscale")}
         </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={activeTab === "cpolar"}
+          style={tabButtonStyle(activeTab === "cpolar")}
+          onClick={() => setActiveTab("cpolar")}
+        >
+          {t("panel.tabs.cpolar")}
+        </button>
       </div>
 
       {activeTab === "cloudflare" ? (
@@ -701,14 +891,15 @@ export default function MobileTunnelPanel(props: PluginSurfaceProps<MobileTunnel
 
       {safeState.error ? <Alert tone="danger">{safeState.error}</Alert> : null}
       {safeState.message ? <Alert tone={running ? "warning" : "primary"}>{safeState.message}</Alert> : null}
-      {running ? <Alert tone="warning">{t("panel.warning.public")}</Alert> : null}
-      {networkWarning ? <Alert tone="warning">{networkWarning}</Alert> : null}
+      {cloudflareRunning ? <Alert tone="warning">{t("panel.warning.public")}</Alert> : null}
+      {networkWarning && (!running || cloudflareRunning) ? <Alert tone="warning">{networkWarning}</Alert> : null}
+      {otherTunnelRunningForCloudflare ? <Alert tone="warning">{t("panel.cloudflare.otherRunning")}</Alert> : null}
       <Alert tone="primary">{t("panel.warning.cache")}</Alert>
 
       <Grid cols={2}>
-        <Card title={running ? t("panel.share.runningTitle") : t("panel.share.startTitle")}>
+        <Card title={cloudflareRunning ? t("panel.share.runningTitle") : t("panel.share.startTitle")}>
           <Stack>
-            {running && safeState.qr_code_url ? (
+            {cloudflareRunning && safeState.qr_code_url ? (
               <div style={{ display: "grid", placeItems: "center" }}>
                 <img
                   src={safeState.qr_code_url}
@@ -725,7 +916,7 @@ export default function MobileTunnelPanel(props: PluginSurfaceProps<MobileTunnel
               </div>
             ) : null}
 
-            {running && safeState.mobile_url ? (
+            {cloudflareRunning && safeState.mobile_url ? (
               <>
                 <Field label={t("panel.fields.mobileUrl")}>
                   <div
@@ -750,7 +941,7 @@ export default function MobileTunnelPanel(props: PluginSurfaceProps<MobileTunnel
               <>
                 <Text>{t("panel.share.description")}</Text>
                 <ButtonGroup>
-                  <Button tone="success" disabled={!vendorReady || startPending} onClick={startTunnel}>{startPending ? t("panel.actions.starting") : t("panel.actions.start")}</Button>
+                  <Button tone="success" disabled={!vendorReady || running || startPending} onClick={startTunnel}>{startPending ? t("panel.actions.starting") : t("panel.actions.start")}</Button>
                   <RefreshButton label={t("panel.actions.refresh")} />
                 </ButtonGroup>
               </>
@@ -776,7 +967,7 @@ export default function MobileTunnelPanel(props: PluginSurfaceProps<MobileTunnel
         </Card>
       </Grid>
         </>
-      ) : (
+      ) : activeTab === "tailscale" ? (
         <Stack>
           <Grid cols={4}>
             <StatCard
@@ -895,6 +1086,132 @@ export default function MobileTunnelPanel(props: PluginSurfaceProps<MobileTunnel
                     secondaryActionUrl={step.secondaryActionUrl}
                     onOpenUrl={openExternalUrl}
                     onCopyCode={copyTailscalePolicy}
+                  />
+                ))}
+              </div>
+            </Stack>
+          </Card>
+        </Stack>
+      ) : (
+        <Stack>
+          <Grid cols={4}>
+            <StatCard
+              label={t("panel.cpolar.fields.installation")}
+              value={<StatusBadge tone={cpolarInstalled ? "success" : "danger"} label={cpolarInstalled ? t("panel.cpolar.status.installed") : t("panel.cpolar.status.missing")} />}
+            />
+            <StatCard
+              label={t("panel.cpolar.fields.auth")}
+              value={<StatusBadge tone={cpolarAuthenticated ? "success" : "warning"} label={cpolarAuthenticated ? t("panel.cpolar.status.authenticated") : t("panel.cpolar.status.notAuthenticated")} />}
+            />
+            <StatCard label={t("panel.cpolar.fields.region")} value={cpolar.region || "-"} />
+            <StatCard label={t("panel.cpolar.fields.version")} value={cpolar.version || "-"} />
+          </Grid>
+
+          <Alert tone={cpolarReady ? "primary" : "warning"}>{cpolarGuide}</Alert>
+          <Alert tone="primary">{t("panel.cpolar.prepareNote")}</Alert>
+          {cpolar.error ? <Alert tone="warning">{cpolar.error}</Alert> : null}
+
+          <Grid cols={2}>
+            <Card title={t("panel.cpolar.title")}>
+              <Stack>
+                <Text>{t("panel.cpolar.description")}</Text>
+                {cpolarRunning && safeState.qr_code_url ? (
+                  <div style={{ display: "grid", placeItems: "center" }}>
+                    <img
+                      src={safeState.qr_code_url}
+                      alt={t("panel.qr.alt")}
+                      style={{
+                        width: "min(260px, 100%)",
+                        aspectRatio: "1 / 1",
+                        border: "1px solid #d8e0ea",
+                        borderRadius: "8px",
+                        background: "#fff",
+                        padding: "10px",
+                      }}
+                    />
+                  </div>
+                ) : null}
+                {cpolarRunning && safeState.mobile_url ? (
+                  <>
+                    <Field label={t("panel.fields.mobileUrl")}>
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        title={mobileUrlVisible ? t("panel.actions.hideLink") : t("panel.actions.showLink")}
+                        onClick={toggleMobileUrlVisible}
+                        onKeyDown={handleMobileUrlKeyDown}
+                        style={{ cursor: "pointer", maxWidth: "100%", minWidth: 0, overflow: "hidden" }}
+                      >
+                        <CodeBlock>{displayedMobileUrl}</CodeBlock>
+                      </div>
+                    </Field>
+                    <ButtonGroup>
+                      <Button tone="default" onClick={toggleMobileUrlVisible}>{mobileUrlVisible ? t("panel.actions.hideLink") : t("panel.actions.showLink")}</Button>
+                      <Button tone="primary" onClick={copyMobileUrl}>{t("panel.actions.copy")}</Button>
+                      <Button tone="warning" onClick={rotateToken}>{t("panel.actions.rotate")}</Button>
+                      <Button tone="danger" onClick={stopTunnel}>{t("panel.actions.stop")}</Button>
+                    </ButtonGroup>
+                  </>
+                ) : null}
+                {otherTunnelRunningForCpolar ? <Alert tone="warning">{t("panel.cpolar.otherRunning")}</Alert> : null}
+                <ButtonGroup>
+                  <Button tone="success" disabled={!cpolarReady || running || cpolarStartPending} onClick={startCpolarTunnel}>
+                    {cpolarStartPending ? t("panel.cpolar.actions.starting") : t("panel.cpolar.actions.start")}
+                  </Button>
+                  <Button tone="primary" disabled={cpolarCheckPending} onClick={refreshCpolarStatus}>
+                    {cpolarCheckPending ? t("panel.cpolar.actions.checking") : t("panel.cpolar.actions.check")}
+                  </Button>
+                  <Button tone="default" onClick={() => openExternalUrl(cpolar.download_url || CPOLAR_DOWNLOAD_URL)}>{t("panel.cpolar.actions.download")}</Button>
+                  <Button tone="default" onClick={() => openExternalUrl(cpolar.auth_url || CPOLAR_AUTH_URL)}>{t("panel.cpolar.actions.auth")}</Button>
+                  <Button tone="default" onClick={() => openExternalUrl(cpolar.docs_url || CPOLAR_DOCS_URL)}>{t("panel.cpolar.actions.docs")}</Button>
+                </ButtonGroup>
+              </Stack>
+            </Card>
+
+            <Card title={t("panel.cpolar.detailsTitle")}>
+              <Stack>
+                <KeyValue
+                  items={[
+                    { key: "path", label: t("panel.cpolar.fields.path"), value: compactText(cpolar.path) },
+                    { key: "config", label: t("panel.cpolar.fields.config"), value: compactText(cpolar.config_path) },
+                    { key: "region", label: t("panel.cpolar.fields.region"), value: cpolar.region || "-" },
+                  ]}
+                />
+                <Text>{t("panel.cpolar.limitNote")}</Text>
+              </Stack>
+            </Card>
+          </Grid>
+
+          <Card title={t("panel.cpolar.guideTitle")}>
+            <Stack>
+              <Text>{t("panel.cpolar.guideIntro")}</Text>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+                  gap: "12px",
+                }}
+              >
+                {cpolarGuideSteps.map((step, index) => (
+                  <TailscaleGuideStep
+                    key={step.title}
+                    index={index + 1}
+                    title={step.title}
+                    body={step.body}
+                    image={step.image}
+                    imageUrls={step.imageUrls}
+                    extraContent={step.extraContent}
+                    actionLabel={step.actionLabel}
+                    actionUrl={step.actionUrl}
+                    secondaryActionLabel={step.secondaryActionLabel}
+                    secondaryActionUrl={step.secondaryActionUrl}
+                    actionButtonLabel={step.actionButtonLabel}
+                    actionButtonPendingLabel={step.actionButtonPendingLabel}
+                    actionButtonTone={step.actionButtonTone}
+                    actionButtonDisabled={step.actionButtonDisabled}
+                    actionButtonPending={step.actionButtonPending}
+                    onActionButtonClick={step.onActionButtonClick}
+                    onOpenUrl={openExternalUrl}
                   />
                 ))}
               </div>

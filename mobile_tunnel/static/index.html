@@ -2,7 +2,1094 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
-  <title>N.E.K.O Mobile Tunnel Assets</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>N.E.K.O Mobile Tunnel</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f5f7fb;
+      --surface: #ffffff;
+      --surface-strong: #eef5ff;
+      --line: #d8e0ea;
+      --text: #172033;
+      --muted: #5c6f86;
+      --primary: #2f7dd3;
+      --primary-strong: #1d5f9f;
+      --success: #33a46b;
+      --warning: #d99022;
+      --danger: #d55252;
+      --pipe: #7891ac;
+      --pipe-active: #24a36a;
+      font-family: "Microsoft YaHei", "Segoe UI", system-ui, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        linear-gradient(180deg, #eef6ff 0%, rgba(238, 246, 255, 0) 260px),
+        var(--bg);
+      color: var(--text);
+    }
+
+    button {
+      font: inherit;
+    }
+
+    .page {
+      width: min(1180px, calc(100% - 28px));
+      margin: 0 auto;
+      padding: 18px 0 24px;
+    }
+
+    .panel-notice {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 14px;
+      align-items: center;
+      padding: 16px;
+      border: 1px solid #b7d5f3;
+      border-radius: 8px;
+      background: #ffffff;
+      box-shadow: 0 8px 28px rgba(47, 125, 211, 0.10);
+    }
+
+    .notice-kicker {
+      margin: 0 0 4px;
+      color: var(--primary-strong);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .panel-notice h1 {
+      margin: 0 0 6px;
+      font-size: 22px;
+      line-height: 1.25;
+    }
+
+    .panel-notice p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.65;
+    }
+
+    .button {
+      min-height: 38px;
+      border: 1px solid #b7d5f3;
+      border-radius: 7px;
+      padding: 0 14px;
+      background: #e9f4ff;
+      color: var(--primary-strong);
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .button:hover,
+    .button:focus-visible {
+      border-color: var(--primary);
+      background: #dceeff;
+      outline: none;
+    }
+
+    .button.primary {
+      border-color: var(--primary);
+      background: var(--primary);
+      color: #ffffff;
+    }
+
+    .button.primary:hover,
+    .button.primary:focus-visible {
+      background: var(--primary-strong);
+    }
+
+    .game-shell {
+      display: grid;
+      grid-template-columns: minmax(0, 1.45fr) minmax(260px, 0.75fr);
+      gap: 14px;
+      margin-top: 14px;
+    }
+
+    .section {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+      box-shadow: 0 8px 26px rgba(23, 32, 51, 0.07);
+    }
+
+    .game-main {
+      padding: 16px;
+    }
+
+    .game-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .game-header h2,
+    .side-panel h2 {
+      margin: 0 0 6px;
+      font-size: 18px;
+      line-height: 1.35;
+    }
+
+    .game-header p,
+    .side-panel p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.65;
+    }
+
+    .board-frame {
+      overflow-x: auto;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background:
+        linear-gradient(90deg, rgba(47, 125, 211, 0.08) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(47, 125, 211, 0.08) 1px, transparent 1px),
+        #f8fbff;
+      background-size: 28px 28px;
+    }
+
+    .board {
+      display: grid;
+      grid-template-columns: repeat(9, 48px);
+      grid-auto-rows: 48px;
+      gap: 7px;
+      width: max-content;
+      margin: 0 auto;
+    }
+
+    .tile {
+      position: relative;
+      width: 48px;
+      height: 48px;
+      border: 1px solid #c5d2e1;
+      border-radius: 8px;
+      background: #ffffff;
+      cursor: pointer;
+      transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+    }
+
+    .tile:hover,
+    .tile:focus-visible {
+      border-color: var(--primary);
+      transform: translateY(-1px);
+      outline: none;
+    }
+
+    .tile.is-endpoint {
+      cursor: default;
+    }
+
+    .tile.is-endpoint:hover,
+    .tile.is-endpoint:focus-visible {
+      transform: none;
+    }
+
+    .tile.is-path {
+      background: #f8fbff;
+    }
+
+    .tile.is-hint:not(.is-connected) {
+      border-color: rgba(217, 144, 34, 0.82);
+      background: #fff8eb;
+      box-shadow: 0 0 0 2px rgba(217, 144, 34, 0.12);
+    }
+
+    .tile.is-hint:not(.is-connected) .pipe {
+      color: var(--warning);
+    }
+
+    .tile.is-connected {
+      border-color: rgba(36, 163, 106, 0.75);
+      background: #f1fff8;
+      box-shadow: 0 0 0 2px rgba(36, 163, 106, 0.10);
+    }
+
+    .pipe {
+      position: absolute;
+      inset: 7px;
+      color: var(--pipe);
+    }
+
+    .tile.is-connected .pipe {
+      color: var(--pipe-active);
+    }
+
+    .pipe::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      background: currentColor;
+      transform: translate(-50%, -50%);
+    }
+
+    .arm {
+      position: absolute;
+      background: currentColor;
+      border-radius: 999px;
+      opacity: 0;
+    }
+
+    .arm.n,
+    .arm.s {
+      left: calc(50% - 4px);
+      width: 8px;
+      height: 20px;
+    }
+
+    .arm.e,
+    .arm.w {
+      top: calc(50% - 4px);
+      width: 20px;
+      height: 8px;
+    }
+
+    .arm.n { top: -2px; }
+    .arm.s { bottom: -2px; }
+    .arm.e { right: -2px; }
+    .arm.w { left: -2px; }
+
+    .pipe.n .arm.n,
+    .pipe.e .arm.e,
+    .pipe.s .arm.s,
+    .pipe.w .arm.w {
+      opacity: 1;
+    }
+
+    .endpoint {
+      position: absolute;
+      z-index: 2;
+      left: 50%;
+      top: 50%;
+      display: grid;
+      place-items: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 7px;
+      background: #172033;
+      color: #ffffff;
+      font-size: 11px;
+      font-weight: 900;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+
+    .tile.end .endpoint {
+      background: var(--success);
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .button:disabled {
+      border-color: #d4dce6;
+      background: #eef2f6;
+      color: #8a9aab;
+      cursor: not-allowed;
+    }
+
+    .side-panel {
+      display: grid;
+      gap: 12px;
+      align-content: start;
+      padding: 16px;
+    }
+
+    .route-card {
+      display: grid;
+      gap: 8px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfdff;
+    }
+
+    .route-row {
+      display: grid;
+      grid-template-columns: 76px minmax(0, 1fr);
+      gap: 10px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .route-row strong {
+      color: var(--text);
+    }
+
+    .meter {
+      height: 9px;
+      border-radius: 999px;
+      background: #e9eef5;
+      overflow: hidden;
+    }
+
+    .meter > span {
+      display: block;
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, var(--primary), var(--success));
+      transition: width 180ms ease;
+    }
+
+    .packets {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      gap: 5px;
+    }
+
+    .packet {
+      height: 10px;
+      border-radius: 999px;
+      background: #dce5f0;
+    }
+
+    .packet.on {
+      background: var(--success);
+      box-shadow: 0 0 10px rgba(51, 164, 107, 0.28);
+    }
+
+    .note-list {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    .confetti-layer {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      pointer-events: none;
+      overflow: hidden;
+    }
+
+    .confetti {
+      position: absolute;
+      top: -18px;
+      width: 8px;
+      height: 14px;
+      border-radius: 2px;
+      animation: confettiFall 1200ms ease-out forwards;
+      transform: translate3d(0, 0, 0) rotate(0deg);
+    }
+
+    @keyframes confettiFall {
+      0% {
+        opacity: 0;
+        transform: translate3d(0, 0, 0) rotate(0deg);
+      }
+
+      12% {
+        opacity: 1;
+      }
+
+      100% {
+        opacity: 0;
+        transform: translate3d(var(--drift), 62vh, 0) rotate(var(--spin));
+      }
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    @media (max-width: 820px) {
+      .panel-notice,
+      .game-shell {
+        grid-template-columns: 1fr;
+      }
+
+    }
+
+    @media (max-width: 520px) {
+      .page {
+        width: min(100% - 18px, 1120px);
+        padding-top: 10px;
+      }
+
+      .panel-notice,
+      .game-main,
+      .side-panel {
+        padding: 12px;
+      }
+
+      .board {
+        grid-template-columns: repeat(9, 38px);
+        grid-auto-rows: 38px;
+        gap: 5px;
+      }
+
+      .tile {
+        width: 38px;
+        height: 38px;
+      }
+
+      .pipe {
+        inset: 6px;
+      }
+    }
+  </style>
 </head>
-<body></body>
+<body>
+  <main class="page">
+    <section class="panel-notice" aria-labelledby="notice-title">
+      <div>
+        <p class="notice-kicker" data-i18n="noticeKicker"></p>
+        <h1 id="notice-title" data-i18n="noticeTitle"></h1>
+        <p data-i18n="noticeBody"></p>
+      </div>
+    </section>
+
+    <section class="game-shell" aria-labelledby="game-title">
+      <div class="section game-main">
+        <div class="game-header">
+          <div>
+            <h2 id="game-title" data-i18n="gameTitle"></h2>
+          </div>
+        </div>
+
+        <div class="board-frame">
+          <div class="board" id="board" role="grid" aria-label="Tunnel board"></div>
+        </div>
+
+        <div class="actions">
+          <button class="button" id="hintButton" type="button" data-i18n="hintButton"></button>
+          <button class="button" id="resetButton" type="button" data-i18n="resetButton"></button>
+        </div>
+      </div>
+
+      <aside class="section side-panel" aria-labelledby="side-title">
+        <div>
+          <h2 id="side-title" data-i18n="sideTitle"></h2>
+          <p data-i18n="sideBody"></p>
+        </div>
+
+        <div class="route-card">
+          <div class="route-row">
+            <span data-i18n="stepsLabel"></span>
+            <strong id="steps">0</strong>
+          </div>
+          <div class="route-row">
+            <span data-i18n="sourceLabel"></span>
+            <strong data-i18n="sourceValue"></strong>
+          </div>
+          <div class="route-row">
+            <span data-i18n="targetLabel"></span>
+            <strong data-i18n="targetValue"></strong>
+          </div>
+          <div class="route-row">
+            <span data-i18n="meterLabel"></span>
+            <div class="meter" aria-hidden="true"><span id="meterFill"></span></div>
+          </div>
+        </div>
+
+        <div class="route-card">
+          <strong data-i18n="packetTitle"></strong>
+          <div class="packets" id="packets" aria-hidden="true"></div>
+        </div>
+
+        <ul class="note-list">
+          <li data-i18n="noteOne"></li>
+        </ul>
+      </aside>
+    </section>
+  </main>
+  <div class="confetti-layer" id="confettiLayer" aria-hidden="true"></div>
+
+  <script>
+    const messages = {
+      "zh-CN": {
+        noticeKicker: "界面页提示",
+        noticeTitle: "主要操作请前往“面板”标签页",
+        noticeBody: "启动分享、生成二维码、复制链接、查看 Cloudflare / Tailscale / cpolar 状态，都在插件详情顶部的“面板”标签页中完成。",
+        gameTitle: "隧道接线",
+        stepsLabel: "当前步数",
+        hintButton: "显示提示",
+        resetButton: "新网络",
+        sideTitle: "隧道连线小游戏",
+        sideBody: "把本地服务、临时公网入口和手机浏览器接成一条可用路径。",
+        sourceLabel: "源端",
+        sourceValue: "电脑 N.E.K.O",
+        targetLabel: "目标",
+        targetValue: "手机浏览器",
+        meterLabel: "通畅度",
+        packetTitle: "模拟数据包",
+        noteOne: "每次点击会旋转一个节点。"
+      },
+      "zh-TW": {
+        noticeKicker: "介面頁提示",
+        noticeTitle: "主要操作請前往「面板」分頁",
+        noticeBody: "啟動分享、產生 QR Code、複製連結、查看 Cloudflare / Tailscale / cpolar 狀態，都在外掛詳情頂部的「面板」分頁中完成。",
+        gameTitle: "隧道接線",
+        stepsLabel: "目前步數",
+        hintButton: "顯示提示",
+        resetButton: "新網路",
+        sideTitle: "隧道連線小遊戲",
+        sideBody: "把本機服務、臨時公開入口和手機瀏覽器接成一條可用路徑。",
+        sourceLabel: "來源",
+        sourceValue: "電腦 N.E.K.O",
+        targetLabel: "目標",
+        targetValue: "手機瀏覽器",
+        meterLabel: "通暢度",
+        packetTitle: "模擬資料包",
+        noteOne: "每次點擊會旋轉一個節點。"
+      },
+      en: {
+        noticeKicker: "Interface Page",
+        noticeTitle: "Use the Panel tab for the main controls",
+        noticeBody: "Start sharing, generate QR codes, copy links, and check Cloudflare / Tailscale / cpolar status from the Panel tab at the top of the plugin detail page.",
+        gameTitle: "Tunnel Wiring",
+        stepsLabel: "Current Steps",
+        hintButton: "Show Hint",
+        resetButton: "New Network",
+        sideTitle: "Tunnel Connection Mini Game",
+        sideBody: "Connect the local service, temporary public entry, and phone browser into one usable path.",
+        sourceLabel: "Source",
+        sourceValue: "PC N.E.K.O",
+        targetLabel: "Target",
+        targetValue: "Phone Browser",
+        meterLabel: "Flow",
+        packetTitle: "Simulated Packets",
+        noteOne: "Each click rotates one node."
+      },
+      ja: {
+        noticeKicker: "インターフェースページ",
+        noticeTitle: "主な操作は「パネル」タブで行います",
+        noticeBody: "共有開始、QR コード生成、リンクコピー、Cloudflare / Tailscale / cpolar 状態確認は、プラグイン詳細上部の「パネル」タブで行います。",
+        gameTitle: "トンネル配線",
+        stepsLabel: "現在の手数",
+        hintButton: "ヒント表示",
+        resetButton: "新しいネットワーク",
+        sideTitle: "トンネル接続ミニゲーム",
+        sideBody: "ローカルサービス、一時公開入口、スマホブラウザを一つの利用可能な経路につなぎます。",
+        sourceLabel: "送信元",
+        sourceValue: "PC N.E.K.O",
+        targetLabel: "宛先",
+        targetValue: "スマホブラウザ",
+        meterLabel: "通りやすさ",
+        packetTitle: "模擬パケット",
+        noteOne: "クリックするたびにノードが回転します。"
+      },
+      ko: {
+        noticeKicker: "인터페이스 페이지",
+        noticeTitle: "주요 작업은 패널 탭에서 진행하세요",
+        noticeBody: "공유 시작, QR 코드 생성, 링크 복사, Cloudflare / Tailscale / cpolar 상태 확인은 플러그인 상세 상단의 패널 탭에서 진행합니다.",
+        gameTitle: "터널 배선",
+        stepsLabel: "현재 단계",
+        hintButton: "힌트 표시",
+        resetButton: "새 네트워크",
+        sideTitle: "터널 연결 미니 게임",
+        sideBody: "로컬 서비스, 임시 공개 입구, 휴대폰 브라우저를 하나의 사용 가능한 경로로 연결합니다.",
+        sourceLabel: "출발",
+        sourceValue: "PC N.E.K.O",
+        targetLabel: "목표",
+        targetValue: "휴대폰 브라우저",
+        meterLabel: "흐름",
+        packetTitle: "모의 패킷",
+        noteOne: "클릭할 때마다 노드 하나가 회전합니다."
+      },
+      es: {
+        noticeKicker: "Página de interfaz",
+        noticeTitle: "Usa la pestaña Panel para los controles principales",
+        noticeBody: "Iniciar el uso compartido, generar QR, copiar enlaces y revisar Cloudflare / Tailscale / cpolar se hace desde la pestaña Panel en la parte superior del detalle del plugin.",
+        gameTitle: "Cableado del túnel",
+        stepsLabel: "Pasos actuales",
+        hintButton: "Mostrar pista",
+        resetButton: "Nueva red",
+        sideTitle: "Minijuego de conexión de túnel",
+        sideBody: "Conecta el servicio local, la entrada pública temporal y el navegador del teléfono en una ruta utilizable.",
+        sourceLabel: "Origen",
+        sourceValue: "PC N.E.K.O",
+        targetLabel: "Destino",
+        targetValue: "Navegador móvil",
+        meterLabel: "Flujo",
+        packetTitle: "Paquetes simulados",
+        noteOne: "Cada clic gira un nodo."
+      },
+      pt: {
+        noticeKicker: "Página de interface",
+        noticeTitle: "Use a aba Painel para os controles principais",
+        noticeBody: "Iniciar compartilhamento, gerar QR, copiar links e verificar Cloudflare / Tailscale / cpolar fica na aba Painel no topo dos detalhes do plugin.",
+        gameTitle: "Ligação do túnel",
+        stepsLabel: "Passos atuais",
+        hintButton: "Mostrar dica",
+        resetButton: "Nova rede",
+        sideTitle: "Minijogo de conexão de túnel",
+        sideBody: "Conecte o serviço local, a entrada pública temporária e o navegador do celular em uma rota utilizável.",
+        sourceLabel: "Origem",
+        sourceValue: "PC N.E.K.O",
+        targetLabel: "Destino",
+        targetValue: "Navegador móvel",
+        meterLabel: "Fluxo",
+        packetTitle: "Pacotes simulados",
+        noteOne: "Cada clique gira um nó."
+      },
+      ru: {
+        noticeKicker: "Страница интерфейса",
+        noticeTitle: "Основные действия находятся на вкладке Panel",
+        noticeBody: "Запуск доступа, QR-коды, копирование ссылок и состояние Cloudflare / Tailscale / cpolar находятся на вкладке Panel вверху страницы плагина.",
+        gameTitle: "Проводка туннеля",
+        stepsLabel: "Текущие ходы",
+        hintButton: "Показать подсказку",
+        resetButton: "Новая сеть",
+        sideTitle: "Мини-игра про соединение туннеля",
+        sideBody: "Соедините локальный сервис, временный публичный вход и браузер телефона в один рабочий путь.",
+        sourceLabel: "Источник",
+        sourceValue: "PC N.E.K.O",
+        targetLabel: "Цель",
+        targetValue: "Браузер телефона",
+        meterLabel: "Поток",
+        packetTitle: "Тестовые пакеты",
+        noteOne: "Каждый щелчок поворачивает один узел."
+      }
+    };
+
+    const sideBits = { n: 1, e: 2, s: 4, w: 8 };
+    const opposite = { n: "s", e: "w", s: "n", w: "e" };
+    const moves = [
+      { side: "n", dx: 0, dy: -1 },
+      { side: "e", dx: 1, dy: 0 },
+      { side: "s", dx: 0, dy: 1 },
+      { side: "w", dx: -1, dy: 0 }
+    ];
+    const width = 9;
+    const height = 6;
+    const minimumRouteNodes = Math.max(18, Math.floor(width * height * 0.34));
+    const minimumRouteTurns = 5;
+    const pcInterfaceSide = "e";
+    const mobileInterfaceSide = "w";
+    let start = { x: 0, y: 2 };
+    let end = { x: width - 1, y: 2 };
+    let locale = resolveLocale();
+    let board = [];
+    let pathKeys = new Set();
+    let steps = 0;
+    let connected = false;
+    let packetTimer = 0;
+    const confettiColors = ["#2f7dd3", "#33a46b", "#d99022", "#d55252", "#7b61d1"];
+
+    function resolveLocale() {
+      const language = (navigator.language || "zh-CN").replace("_", "-");
+      if (messages[language]) return language;
+      const base = language.split("-")[0];
+      if (base === "zh") return language.toLowerCase().includes("tw") || language.toLowerCase().includes("hk") ? "zh-TW" : "zh-CN";
+      return messages[base] ? base : "en";
+    }
+
+    function text(key) {
+      return (messages[locale] && messages[locale][key]) || messages.en[key] || key;
+    }
+
+    function applyTranslations() {
+      document.documentElement.lang = locale;
+      document.querySelectorAll("[data-i18n]").forEach((node) => {
+        node.textContent = text(node.getAttribute("data-i18n"));
+      });
+      document.getElementById("board").setAttribute("aria-label", text("gameTitle"));
+    }
+
+    function keyOf(x, y) {
+      return x + "," + y;
+    }
+
+    function rotateMask(mask) {
+      let next = 0;
+      if (mask & sideBits.n) next |= sideBits.e;
+      if (mask & sideBits.e) next |= sideBits.s;
+      if (mask & sideBits.s) next |= sideBits.w;
+      if (mask & sideBits.w) next |= sideBits.n;
+      return next;
+    }
+
+    function randomInt(max) {
+      return Math.floor(Math.random() * max);
+    }
+
+    function shuffle(items) {
+      const next = items.slice();
+      for (let i = next.length - 1; i > 0; i -= 1) {
+        const j = randomInt(i + 1);
+        const temp = next[i];
+        next[i] = next[j];
+        next[j] = temp;
+      }
+      return next;
+    }
+
+    function inBounds(x, y) {
+      return x >= 0 && x < width && y >= 0 && y < height;
+    }
+
+    function neighborOf(point, side) {
+      const move = moves.find((item) => item.side === side);
+      return { x: point.x + move.dx, y: point.y + move.dy };
+    }
+
+    function manhattan(a, b) {
+      return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+    }
+
+    function pickEndpoints() {
+      const leftSpan = Math.max(1, Math.floor(width / 2));
+      const rightSpan = leftSpan;
+      for (let attempt = 0; attempt < 80; attempt += 1) {
+        const nextStart = { x: randomInt(leftSpan), y: randomInt(height) };
+        const nextEnd = { x: width - 1 - randomInt(rightSpan), y: randomInt(height) };
+        if (nextEnd.x <= nextStart.x + 1) continue;
+        const first = neighborOf(nextStart, pcInterfaceSide);
+        const target = neighborOf(nextEnd, mobileInterfaceSide);
+        if (!inBounds(first.x, first.y) || !inBounds(target.x, target.y)) continue;
+        if (manhattan(first, target) < 3) continue;
+        return { start: nextStart, end: nextEnd };
+      }
+      return {
+        start: { x: 0, y: randomInt(height) },
+        end: { x: width - 1, y: randomInt(height) }
+      };
+    }
+
+    function findRandomPath(from, target, blockedKeys, minimumNodes) {
+      const seen = new Set(blockedKeys);
+      const route = [{ ...from }];
+      seen.add(keyOf(from.x, from.y));
+      let searchSteps = 0;
+
+      function walk(point, depth) {
+        searchSteps += 1;
+        if (searchSteps > 2600) return false;
+        if (point.x === target.x && point.y === target.y) return route.length >= minimumNodes;
+        if (depth > width * height) return false;
+        const previous = route[route.length - 2];
+        const previousSide = previous ? directionBetween(previous, point) : "";
+        const stillGrowing = route.length < minimumNodes;
+        const candidates = shuffle(moves)
+          .map((move) => ({ x: point.x + move.dx, y: point.y + move.dy }))
+          .filter((item) => inBounds(item.x, item.y) && !seen.has(keyOf(item.x, item.y)))
+          .sort((a, b) => {
+            const sideA = directionBetween(point, a);
+            const sideB = directionBetween(point, b);
+            const turnBiasA = previousSide && sideA !== previousSide ? -1.25 : 0;
+            const turnBiasB = previousSide && sideB !== previousSide ? -1.25 : 0;
+            const distanceA = manhattan(a, target);
+            const distanceB = manhattan(b, target);
+            const scoreA = (stillGrowing ? -distanceA * 0.42 : distanceA) + Math.random() * 3.2 + turnBiasA;
+            const scoreB = (stillGrowing ? -distanceB * 0.42 : distanceB) + Math.random() * 3.2 + turnBiasB;
+            return scoreA - scoreB;
+          });
+
+        for (const next of candidates) {
+          seen.add(keyOf(next.x, next.y));
+          route.push(next);
+          if (walk(next, depth + 1)) return true;
+          route.pop();
+          seen.delete(keyOf(next.x, next.y));
+        }
+        return false;
+      }
+
+      return walk(from, 0) ? route.slice() : null;
+    }
+
+    function countRouteTurns(route) {
+      let turns = 0;
+      for (let index = 1; index < route.length - 1; index += 1) {
+        const previous = directionBetween(route[index - 1], route[index]);
+        const next = directionBetween(route[index], route[index + 1]);
+        if (previous && next && previous !== next) turns += 1;
+      }
+      return turns;
+    }
+
+    function buildPath() {
+      let bestRoute = null;
+      let bestScore = -1;
+      for (let attempt = 0; attempt < 180; attempt += 1) {
+        const endpoints = pickEndpoints();
+        start = endpoints.start;
+        end = endpoints.end;
+        const first = neighborOf(start, pcInterfaceSide);
+        const target = neighborOf(end, mobileInterfaceSide);
+        const path = findRandomPath(first, target, new Set([keyOf(start.x, start.y), keyOf(end.x, end.y)]), minimumRouteNodes - 2);
+        if (path && path.length >= 4) {
+          const route = [{ ...start }, ...path, { ...end }];
+          const turns = countRouteTurns(route);
+          const score = route.length + turns * 2;
+          if (score > bestScore) {
+            bestRoute = route;
+            bestScore = score;
+          }
+          if (route.length >= minimumRouteNodes && turns >= minimumRouteTurns) return route;
+        }
+      }
+      if (bestRoute) return bestRoute;
+      const fallbackY = Math.floor(height / 2);
+      start = { x: 0, y: fallbackY };
+      end = { x: width - 1, y: fallbackY };
+      const fallback = [{ ...start }];
+      for (let x = 1; x < width - 1; x += 1) {
+        fallback.push({ x, y: fallbackY });
+      }
+      fallback.push({ ...end });
+      return fallback;
+    }
+
+    function directionBetween(a, b) {
+      if (b.x === a.x && b.y === a.y - 1) return "n";
+      if (b.x === a.x + 1 && b.y === a.y) return "e";
+      if (b.x === a.x && b.y === a.y + 1) return "s";
+      if (b.x === a.x - 1 && b.y === a.y) return "w";
+      return "";
+    }
+
+    function createPuzzle() {
+      const route = buildPath();
+      pathKeys = new Set(route.map((item) => keyOf(item.x, item.y)));
+      const masks = new Map();
+      route.forEach((point, index) => {
+        let mask = 0;
+        if (index === 0) mask |= sideBits[pcInterfaceSide];
+        if (index === route.length - 1) mask |= sideBits[mobileInterfaceSide];
+        if (route[index - 1]) mask |= sideBits[directionBetween(point, route[index - 1])];
+        if (route[index + 1]) mask |= sideBits[directionBetween(point, route[index + 1])];
+        masks.set(keyOf(point.x, point.y), mask);
+      });
+
+      const decoys = [3, 5, 6, 9, 10, 12, 7, 11, 13, 14];
+      board = [];
+      for (let y = 0; y < height; y += 1) {
+        for (let x = 0; x < width; x += 1) {
+          const key = keyOf(x, y);
+          const endpoint = x === start.x && y === start.y ? "pc" : x === end.x && y === end.y ? "mobile" : "";
+          let mask = masks.get(key) || decoys[randomInt(decoys.length)];
+          if (!endpoint) {
+            const rotations = 1 + randomInt(4);
+            for (let i = 0; i < rotations; i += 1) mask = rotateMask(mask);
+          }
+          board.push({ x, y, mask, path: pathKeys.has(key), endpoint, connected: false, hint: false });
+        }
+      }
+      steps = 0;
+      connected = false;
+      stopPackets();
+      updateHintButton();
+      const visited = findConnectedTiles();
+      board.forEach((tile) => {
+        tile.connected = visited.has(keyOf(tile.x, tile.y));
+      });
+      updateStats();
+      renderBoard();
+    }
+
+    function tileAt(x, y) {
+      return board.find((tile) => tile.x === x && tile.y === y);
+    }
+
+    function hasSide(tile, side) {
+      return !!(tile.mask & sideBits[side]);
+    }
+
+    function findConnectedTiles() {
+      const startTile = tileAt(start.x, start.y);
+      const visited = new Set();
+      const queue = [];
+      if (startTile && hasSide(startTile, pcInterfaceSide)) {
+        visited.add(keyOf(start.x, start.y));
+        queue.push(startTile);
+      }
+      while (queue.length) {
+        const tile = queue.shift();
+        moves.forEach((move) => {
+          if (!hasSide(tile, move.side)) return;
+          const nx = tile.x + move.dx;
+          const ny = tile.y + move.dy;
+          if (nx < 0 || nx >= width || ny < 0 || ny >= height) return;
+          const next = tileAt(nx, ny);
+          if (!next || !hasSide(next, opposite[move.side])) return;
+          const key = keyOf(nx, ny);
+          if (visited.has(key)) return;
+          visited.add(key);
+          queue.push(next);
+        });
+      }
+      return visited;
+    }
+
+    function refreshConnection() {
+      const wasConnected = connected;
+      const visited = findConnectedTiles();
+      board.forEach((tile) => {
+        tile.connected = visited.has(keyOf(tile.x, tile.y));
+      });
+      const endTile = tileAt(end.x, end.y);
+      connected = !!endTile && visited.has(keyOf(end.x, end.y)) && hasSide(endTile, mobileInterfaceSide);
+      if (connected) {
+        if (!wasConnected) {
+          startPackets();
+          launchConfetti();
+        } else if (!packetTimer) {
+          startPackets();
+        }
+      } else {
+        stopPackets();
+      }
+      updateHintButton();
+      renderBoard();
+      return connected;
+    }
+
+    function renderBoard() {
+      const boardNode = document.getElementById("board");
+      boardNode.innerHTML = "";
+      board.forEach((tile, index) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "tile" + (tile.path ? " is-path" : "") + (tile.hint ? " is-hint" : "") + (tile.connected ? " is-connected" : "") + (tile.endpoint ? " is-endpoint" : "") + (tile.endpoint === "pc" ? " start" : "") + (tile.endpoint === "mobile" ? " end" : "");
+        button.setAttribute("role", "gridcell");
+        button.setAttribute("aria-label", tile.x + 1 + ", " + (tile.y + 1));
+        if (tile.endpoint) {
+          button.setAttribute("aria-disabled", "true");
+        } else {
+          button.addEventListener("click", () => rotateTile(index));
+        }
+        const pipe = document.createElement("span");
+        pipe.className = "pipe" + (hasSide(tile, "n") ? " n" : "") + (hasSide(tile, "e") ? " e" : "") + (hasSide(tile, "s") ? " s" : "") + (hasSide(tile, "w") ? " w" : "");
+        ["n", "e", "s", "w"].forEach((side) => {
+          const arm = document.createElement("span");
+          arm.className = "arm " + side;
+          pipe.appendChild(arm);
+        });
+        button.appendChild(pipe);
+        if (tile.endpoint === "pc") {
+          const label = document.createElement("span");
+          label.className = "endpoint";
+          label.textContent = "PC";
+          button.appendChild(label);
+        }
+        if (tile.endpoint === "mobile") {
+          const label = document.createElement("span");
+          label.className = "endpoint";
+          label.textContent = "MB";
+          button.appendChild(label);
+        }
+        boardNode.appendChild(button);
+      });
+      updateMeter();
+    }
+
+    function rotateTile(index) {
+      board[index].mask = rotateMask(board[index].mask);
+      steps += 1;
+      refreshConnection();
+      updateStats();
+    }
+
+    function updateStats() {
+      document.getElementById("steps").textContent = String(steps);
+    }
+
+    function updateMeter() {
+      const pcKey = keyOf(start.x, start.y);
+      const connectedCount = board.filter((tile) => tile.connected && keyOf(tile.x, tile.y) !== pcKey).length;
+      const pathCount = Math.max(1, Array.from(pathKeys).filter((key) => key !== pcKey).length);
+      const percent = connected ? 100 : Math.min(92, Math.round((connectedCount / pathCount) * 100));
+      document.getElementById("meterFill").style.width = percent + "%";
+    }
+
+    function startPackets() {
+      stopPackets();
+      const packetBox = document.getElementById("packets");
+      packetBox.innerHTML = "";
+      for (let i = 0; i < 8; i += 1) {
+        const item = document.createElement("span");
+        item.className = "packet";
+        packetBox.appendChild(item);
+      }
+      let tick = 0;
+      packetTimer = window.setInterval(() => {
+        Array.from(packetBox.children).forEach((node, index) => {
+          node.className = "packet" + (index <= tick % 8 ? " on" : "");
+        });
+        tick += 1;
+      }, 180);
+    }
+
+    function stopPackets() {
+      if (packetTimer) window.clearInterval(packetTimer);
+      packetTimer = 0;
+      const packetBox = document.getElementById("packets");
+      if (!packetBox) return;
+      packetBox.innerHTML = "";
+      for (let i = 0; i < 8; i += 1) {
+        const item = document.createElement("span");
+        item.className = "packet";
+        packetBox.appendChild(item);
+      }
+    }
+
+    function updateHintButton() {
+      const hintButton = document.getElementById("hintButton");
+      if (hintButton) hintButton.disabled = connected;
+    }
+
+    function launchConfetti() {
+      const layer = document.getElementById("confettiLayer");
+      if (!layer) return;
+      layer.innerHTML = "";
+      for (let index = 0; index < 46; index += 1) {
+        const item = document.createElement("span");
+        item.className = "confetti";
+        item.style.left = randomInt(100) + "%";
+        item.style.background = confettiColors[index % confettiColors.length];
+        item.style.animationDelay = randomInt(220) + "ms";
+        item.style.setProperty("--drift", randomInt(160) - 80 + "px");
+        item.style.setProperty("--spin", randomInt(520) + 180 + "deg");
+        layer.appendChild(item);
+      }
+      setTimeout(() => {
+        layer.innerHTML = "";
+      }, 1600);
+    }
+
+    function showHint() {
+      if (connected) return;
+      board.forEach((tile) => {
+        tile.hint = tile.path;
+      });
+      updateStats();
+      renderBoard();
+    }
+
+    document.getElementById("hintButton").addEventListener("click", showHint);
+    document.getElementById("resetButton").addEventListener("click", createPuzzle);
+    applyTranslations();
+    stopPackets();
+    createPuzzle();
+  </script>
+</body>
 </html>

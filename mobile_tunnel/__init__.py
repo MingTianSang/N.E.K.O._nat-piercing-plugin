@@ -26,12 +26,18 @@ from plugin.sdk.plugin import Err, NekoPluginBase, Ok, SdkError, lifecycle, neko
 CLOUDFLARED_VERSION = "2026.5.2"
 CLOUDFLARED_SHA256 = "20b9638f685333d623798e733effbad2487093f15ba592f6c7752360ff3b7ab7"
 TRYCLOUDFLARE_URL_RE = re.compile(r"https://[A-Za-z0-9-]+\.trycloudflare\.com")
+CPOLAR_URL_RE = re.compile(r"https://[A-Za-z0-9.-]+\.cpolar\.(?:io|cn|com|top)(?::\d+)?")
 START_TIMEOUT_SECONDS = 45
 DEFAULT_IDLE_TIMEOUT_MINUTES = 10
 TAILSCALE_STATUS_CACHE_SECONDS = 15
 TAILSCALE_FUNNEL_HTTPS_PORT = 10000
 TAILSCALE_DOWNLOAD_URL = "https://tailscale.com/download/windows"
 TAILSCALE_FUNNEL_DOCS_URL = "https://tailscale.com/docs/features/tailscale-funnel"
+CPOLAR_DOWNLOAD_URL = "https://www.cpolar.com/download"
+CPOLAR_DASHBOARD_URL = "https://dashboard.cpolar.com/"
+CPOLAR_AUTH_URL = "https://dashboard.cpolar.com/auth"
+CPOLAR_DOCS_URL = "https://www.cpolar.com/docs"
+CPOLAR_DEFAULT_REGION = "cn"
 SESSION_COOKIE_NAME = "neko_mobile_tunnel_session"
 HOP_BY_HOP_HEADERS = {
     "connection",
@@ -47,7 +53,7 @@ HOP_BY_HOP_HEADERS = {
 
 @neko_plugin
 class MobileTunnelPlugin(NekoPluginBase):
-    """Create a controlled mobile access entry through TryCloudflare."""
+    """Create a controlled mobile access entry through supported tunnel providers."""
 
     def __init__(self, ctx):
         super().__init__(ctx)
@@ -74,6 +80,7 @@ class MobileTunnelPlugin(NekoPluginBase):
         self._idle_task: asyncio.Task | None = None
         self._url_future: asyncio.Future[str] | None = None
         self._last_cloudflared_lines: list[str] = []
+        self._last_tunnel_process_lines: list[str] = []
         self._last_mobile_entered_at: float | None = None
         self._last_mobile_access_at: float | None = None
         self._idle_last_activity_at: float | None = None
@@ -83,6 +90,8 @@ class MobileTunnelPlugin(NekoPluginBase):
         self._target_base_url = f"http://127.0.0.1:{MAIN_SERVER_PORT}"
         self._tailscale_status_cache: dict[str, Any] | None = None
         self._tailscale_status_checked_at: float = 0.0
+        self._cpolar_status_cache: dict[str, Any] | None = None
+        self._cpolar_status_checked_at: float = 0.0
 
     def _t(self, key: str, *, locale: str | None = None, default: str = "", **params: object) -> str:
         return self.i18n.t(key, locale=locale, default=default, **params)
@@ -118,6 +127,7 @@ class MobileTunnelPlugin(NekoPluginBase):
     async def dashboard(self):
         await self._refresh_dead_process()
         await self._refresh_tailscale_status()
+        await self._refresh_cpolar_status()
         return self._build_status_payload(include_qr=True)
 
     @ui.action(
@@ -263,6 +273,79 @@ class MobileTunnelPlugin(NekoPluginBase):
             return Ok(payload)
 
     @ui.action(
+        id="start_cpolar_tunnel",
+        label=tr("panel.cpolar.actions.start", default="Start cpolar"),
+        tone="success",
+        group="cpolar",
+        order=45,
+        refresh_context=True,
+    )
+    @plugin_entry(
+        id="start_cpolar_tunnel",
+        name=tr("entries.cpolarStart.name", default="Start cpolar Tunnel"),
+        description=tr("entries.cpolarStart.description", default="Start the local mobile gateway and expose it through cpolar."),
+        input_schema={"type": "object", "properties": {}},
+        llm_result_fields=["summary", "mobile_url"],
+    )
+    async def start_cpolar_tunnel(self, **_):
+        async with self._lock:
+            if self._is_tunnel_active():
+                return Ok(self._build_status_payload(include_qr=True))
+
+            await self._stop_tunnel_locked(clear_message=True)
+            status = await self._refresh_cpolar_status(force=True)
+            if not status.get("installed"):
+                self._status = "error"
+                self._error = self._t("messages.cpolarMissing")
+                return Err(SdkError(self._error))
+            if not status.get("authenticated"):
+                self._status = "error"
+                self._error = self._t("errors.cpolarNotReady")
+                return Err(SdkError(self._error))
+
+            cpolar = self._resolve_cpolar()
+            if cpolar is None:
+                self._status = "error"
+                self._error = self._t("messages.cpolarMissing")
+                return Err(SdkError(self._error))
+
+            self._status = "starting"
+            self._error = None
+            self._last_message = self._t("messages.startingGateway")
+            self._token = secrets.token_urlsafe(32)
+            self._session_cookie_value = secrets.token_urlsafe(32)
+            self._started_at = time.time()
+            self._idle_last_activity_at = self._started_at
+            self._idle_locked_by_mobile_session = False
+            self._tunnel_provider = "cpolar"
+
+            try:
+                await self._start_gateway_locked()
+                await self._start_cpolar_locked(cpolar)
+                assert self._url_future is not None
+                public_url = await asyncio.wait_for(self._url_future, timeout=START_TIMEOUT_SECONDS)
+            except Exception as exc:
+                await self._stop_tunnel_locked(clear_message=False)
+                self._status = "error"
+                self._error = self._format_start_error(exc)
+                return Err(SdkError(self._error))
+
+            self._public_url = public_url.rstrip("/")
+            self._tunnel_provider = "cpolar"
+            self._mobile_url = f"{self._public_url}/s/{self._token}"
+            self._qr_png = self._make_qr_png(self._mobile_url)
+            self._qr_data_url = self._make_qr_data_url(self._qr_png)
+            self._status = "running"
+            self._last_message = self._t("messages.cpolarTunnelStarted")
+            self._idle_task = asyncio.create_task(self._stop_when_idle())
+
+            host = urlparse(self._public_url).hostname or "cpolar"
+            self.logger.info("MobileTunnel cpolar started: port={} host={}", self._gateway_port, host)
+            payload = self._build_status_payload(include_qr=True)
+            payload["summary"] = self._t("messages.mobileUrlCreated")
+            return Ok(payload)
+
+    @ui.action(
         label=tr("actions.stop.label", default="Stop Sharing"),
         tone="danger",
         group="tunnel",
@@ -372,6 +455,40 @@ class MobileTunnelPlugin(NekoPluginBase):
             status["summary"] = self._t("messages.tailscaleReady")
         return Ok(status)
 
+    @ui.action(
+        id="get_cpolar_status",
+        label=tr("panel.cpolar.actions.check", default="Check cpolar"),
+        tone="primary",
+        group="cpolar",
+        order=50,
+        refresh_context=True,
+    )
+    @plugin_entry(
+        id="get_cpolar_status",
+        name=tr("entries.cpolar.name", default="Check cpolar"),
+        description=tr("entries.cpolar.description", default="Check whether cpolar is installed and authenticated."),
+        input_schema={"type": "object", "properties": {"start_cpolar": {"type": "boolean"}, "auth_token": {"type": "string"}}},
+        llm_result_fields=["summary", "installed", "authenticated"],
+    )
+    async def get_cpolar_status(self, **_):
+        if bool(_.get("start_cpolar")):
+            return await self.start_cpolar_tunnel()
+
+        raw_token = str(_.get("auth_token") or "").strip()
+        if raw_token:
+            result = await self._save_cpolar_auth_token(raw_token)
+            if result is not None:
+                return result
+
+        status = await self._refresh_cpolar_status(force=True)
+        if not status.get("installed"):
+            status["summary"] = self._t("messages.cpolarMissing")
+        elif not status.get("authenticated"):
+            status["summary"] = self._t("messages.cpolarNeedsAuth")
+        else:
+            status["summary"] = self._t("messages.cpolarReady")
+        return Ok(status)
+
     async def _resolve_cloudflared(self) -> Path | None:
         bundled = self._vendor_root / "windows-amd64" / "cloudflared.exe"
         if sys.platform.startswith("win") and bundled.is_file():
@@ -440,9 +557,9 @@ class MobileTunnelPlugin(NekoPluginBase):
             "--no-autoupdate",
             **kwargs,
         )
-        self._stdout_task = asyncio.create_task(self._read_cloudflared_stream(self._process.stdout))
-        self._stderr_task = asyncio.create_task(self._read_cloudflared_stream(self._process.stderr))
-        self._watch_task = asyncio.create_task(self._watch_cloudflared(self._process))
+        self._stdout_task = asyncio.create_task(self._read_tunnel_process_stream(self._process.stdout))
+        self._stderr_task = asyncio.create_task(self._read_tunnel_process_stream(self._process.stderr))
+        self._watch_task = asyncio.create_task(self._watch_tunnel_process(self._process))
 
     async def _start_tailscale_funnel_locked(self, tailscale: Path) -> None:
         if not self._gateway_port:
@@ -465,14 +582,45 @@ class MobileTunnelPlugin(NekoPluginBase):
             target,
             **kwargs,
         )
-        self._stdout_task = asyncio.create_task(self._read_cloudflared_stream(self._process.stdout))
-        self._stderr_task = asyncio.create_task(self._read_cloudflared_stream(self._process.stderr))
-        self._watch_task = asyncio.create_task(self._watch_cloudflared(self._process))
+        self._stdout_task = asyncio.create_task(self._read_tunnel_process_stream(self._process.stdout))
+        self._stderr_task = asyncio.create_task(self._read_tunnel_process_stream(self._process.stderr))
+        self._watch_task = asyncio.create_task(self._watch_tunnel_process(self._process))
         await asyncio.sleep(1.2)
         if self._process.returncode is not None:
-            raise RuntimeError(self._last_cloudflared_lines[-1] if self._last_cloudflared_lines else self._t("errors.tailscaleStartFailed"))
+            raise RuntimeError(self._last_tunnel_process_lines[-1] if self._last_tunnel_process_lines else self._t("errors.tailscaleStartFailed"))
 
-    async def _read_cloudflared_stream(self, stream: asyncio.StreamReader | None) -> None:
+    async def _start_cpolar_locked(self, cpolar: Path) -> None:
+        if not self._gateway_port:
+            raise RuntimeError(self._t("errors.gatewayNotStarted"))
+
+        loop = asyncio.get_running_loop()
+        self._url_future = loop.create_future()
+        config_path = self._cpolar_config_path()
+        command = [
+            str(cpolar),
+            "http",
+            f"-region={CPOLAR_DEFAULT_REGION}",
+            "-redirect-https=true",
+            "-log=stdout",
+        ]
+        if config_path.is_file():
+            command.append(f"-config={config_path}")
+        command.append(str(self._gateway_port))
+
+        kwargs: dict[str, Any] = {
+            "stdout": asyncio.subprocess.PIPE,
+            "stderr": asyncio.subprocess.PIPE,
+            "cwd": str(self.config_dir),
+        }
+        if os.name == "nt":
+            kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+
+        self._process = await asyncio.create_subprocess_exec(*command, **kwargs)
+        self._stdout_task = asyncio.create_task(self._read_tunnel_process_stream(self._process.stdout))
+        self._stderr_task = asyncio.create_task(self._read_tunnel_process_stream(self._process.stderr))
+        self._watch_task = asyncio.create_task(self._watch_tunnel_process(self._process))
+
+    async def _read_tunnel_process_stream(self, stream: asyncio.StreamReader | None) -> None:
         if stream is None:
             return
         while True:
@@ -482,17 +630,38 @@ class MobileTunnelPlugin(NekoPluginBase):
             text = line.decode("utf-8", errors="replace").strip()
             if not text:
                 continue
-            match = TRYCLOUDFLARE_URL_RE.search(text)
-            if match and self._url_future and not self._url_future.done():
-                self._url_future.set_result(match.group(0))
-            self._remember_cloudflared_line(TRYCLOUDFLARE_URL_RE.sub("<trycloudflare-url>", text))
+            tunnel_url = self._extract_tunnel_url_from_line(text)
+            if tunnel_url and self._url_future and not self._url_future.done():
+                self._url_future.set_result(tunnel_url)
+            self._remember_tunnel_process_line(self._sanitize_tunnel_process_line(text))
 
-    def _remember_cloudflared_line(self, line: str) -> None:
+    def _extract_tunnel_url_from_line(self, line: str) -> str | None:
+        cloudflare_match = TRYCLOUDFLARE_URL_RE.search(line)
+        if cloudflare_match:
+            return cloudflare_match.group(0)
+        for match in CPOLAR_URL_RE.finditer(line):
+            value = match.group(0)
+            host = (urlparse(value).hostname or "").lower()
+            if host in {"dashboard.cpolar.com", "www.cpolar.com", "cpolar.com"}:
+                continue
+            if host.startswith(("dashboard.", "www.", "docs.")):
+                continue
+            return value
+        return None
+
+    def _sanitize_tunnel_process_line(self, line: str) -> str:
+        sanitized = TRYCLOUDFLARE_URL_RE.sub("<trycloudflare-url>", line)
+        return CPOLAR_URL_RE.sub("<cpolar-url>", sanitized)
+
+    def _remember_tunnel_process_line(self, line: str) -> None:
+        self._last_tunnel_process_lines.append(line)
+        if len(self._last_tunnel_process_lines) > 12:
+            self._last_tunnel_process_lines = self._last_tunnel_process_lines[-12:]
         self._last_cloudflared_lines.append(line)
         if len(self._last_cloudflared_lines) > 12:
             self._last_cloudflared_lines = self._last_cloudflared_lines[-12:]
 
-    async def _watch_cloudflared(self, process: asyncio.subprocess.Process) -> None:
+    async def _watch_tunnel_process(self, process: asyncio.subprocess.Process) -> None:
         returncode = await process.wait()
         if self._process is not process:
             return
@@ -573,6 +742,7 @@ class MobileTunnelPlugin(NekoPluginBase):
         self._url_future = None
         self._gateway_port = None
         self._last_cloudflared_lines = []
+        self._last_tunnel_process_lines = []
         self._last_mobile_entered_at = None
         self._last_mobile_access_at = None
         self._idle_last_activity_at = None
@@ -669,6 +839,7 @@ class MobileTunnelPlugin(NekoPluginBase):
         self._session_cookie_value = None
         self._started_at = None
         self._gateway_port = None
+        self._last_tunnel_process_lines = []
         self._last_mobile_entered_at = None
         self._last_mobile_access_at = None
         self._idle_last_activity_at = None
@@ -714,6 +885,7 @@ class MobileTunnelPlugin(NekoPluginBase):
             "cloudflared_version": CLOUDFLARED_VERSION,
             "vendor": self._vendor_status(include_hash=False),
             "tailscale": self._tailscale_status_cache or self._empty_tailscale_status(),
+            "cpolar": self._cpolar_status_cache or self._empty_cpolar_status(),
             "error": self._error,
             "message": self._last_message,
         }
@@ -731,6 +903,22 @@ class MobileTunnelPlugin(NekoPluginBase):
             "error": "",
             "download_url": TAILSCALE_DOWNLOAD_URL,
             "funnel_docs_url": TAILSCALE_FUNNEL_DOCS_URL,
+        }
+
+    def _empty_cpolar_status(self) -> dict[str, Any]:
+        config_path = self._cpolar_config_path()
+        return {
+            "installed": False,
+            "path": "",
+            "version": "",
+            "authenticated": False,
+            "config_path": str(config_path),
+            "region": CPOLAR_DEFAULT_REGION,
+            "error": "",
+            "download_url": CPOLAR_DOWNLOAD_URL,
+            "dashboard_url": CPOLAR_DASHBOARD_URL,
+            "auth_url": CPOLAR_AUTH_URL,
+            "docs_url": CPOLAR_DOCS_URL,
         }
 
     async def _refresh_tailscale_status(self, *, force: bool = False) -> dict[str, Any]:
@@ -830,6 +1018,128 @@ class MobileTunnelPlugin(NekoPluginBase):
             "returncode": completed.returncode,
         }
 
+    async def _refresh_cpolar_status(self, *, force: bool = False) -> dict[str, Any]:
+        now = time.time()
+        if (
+            not force
+            and self._cpolar_status_cache is not None
+            and now - self._cpolar_status_checked_at < TAILSCALE_STATUS_CACHE_SECONDS
+        ):
+            return self._cpolar_status_cache
+
+        status = await asyncio.to_thread(self._cpolar_status)
+        self._cpolar_status_cache = status
+        self._cpolar_status_checked_at = time.time()
+        return status
+
+    def _cpolar_status(self) -> dict[str, Any]:
+        payload = self._empty_cpolar_status()
+        cpolar = self._resolve_cpolar()
+        if cpolar is None:
+            return payload
+
+        payload["installed"] = True
+        payload["path"] = str(cpolar)
+        version = self._run_cpolar_command(cpolar, "version", timeout=2.5)
+        if version["ok"]:
+            payload["version"] = (version["stdout"].splitlines() or [""])[0].strip()
+        else:
+            payload["error"] = version["stderr"] or version["stdout"]
+        payload["authenticated"] = self._cpolar_config_has_authtoken()
+        return payload
+
+    def _resolve_cpolar(self) -> Path | None:
+        found = shutil.which("cpolar")
+        if found:
+            return Path(found)
+
+        candidates = [
+            Path(os.environ.get("ProgramFiles", "")) / "cpolar" / "cpolar.exe",
+            Path(os.environ.get("ProgramFiles(x86)", "")) / "cpolar" / "cpolar.exe",
+            Path(os.environ.get("LocalAppData", "")) / "cpolar" / "cpolar.exe",
+        ]
+        for candidate in candidates:
+            if candidate.is_file():
+                return candidate
+        return None
+
+    def _cpolar_config_path(self) -> Path:
+        return Path.home() / ".cpolar" / "cpolar.yml"
+
+    def _cpolar_config_has_authtoken(self) -> bool:
+        config_path = self._cpolar_config_path()
+        if not config_path.is_file():
+            return False
+        try:
+            text = config_path.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            return False
+        for line in text.splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            if not stripped.lower().startswith("authtoken:"):
+                continue
+            token = stripped.split(":", 1)[1].strip().strip('"').strip("'")
+            return bool(token and "xxxx" not in token.lower())
+        return False
+
+    def _run_cpolar_command(self, cpolar: Path, *args: str, timeout: float) -> dict[str, Any]:
+        try:
+            completed = subprocess.run(
+                [str(cpolar), *args],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout,
+                check=False,
+                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+            )
+        except Exception as exc:
+            return {"ok": False, "stdout": "", "stderr": str(exc)}
+        return {
+            "ok": completed.returncode == 0,
+            "stdout": completed.stdout.strip(),
+            "stderr": completed.stderr.strip(),
+            "returncode": completed.returncode,
+        }
+
+    async def _save_cpolar_auth_token(self, raw_token: str) -> Ok | Err:
+        cpolar = self._resolve_cpolar()
+        if cpolar is None:
+            return Err(SdkError(self._t("messages.cpolarMissing")))
+
+        token = self._extract_cpolar_auth_token(raw_token)
+        if not token:
+            return Err(SdkError(self._t("errors.cpolarTokenEmpty")))
+
+        result = await asyncio.to_thread(self._run_cpolar_command, cpolar, "authtoken", token, timeout=8)
+        if not result["ok"]:
+            return Err(SdkError(result["stderr"] or result["stdout"] or self._t("errors.cpolarAuthFailed")))
+
+        status = await self._refresh_cpolar_status(force=True)
+        if not status.get("authenticated"):
+            return Err(SdkError(self._t("errors.cpolarAuthFailed")))
+        status["summary"] = self._t("messages.cpolarAuthSaved")
+        return Ok(status)
+
+    def _extract_cpolar_auth_token(self, raw_token: str) -> str:
+        cleaned = raw_token.strip()
+        if not cleaned:
+            return ""
+        if "cpolar authtoken" in cleaned.lower():
+            parts = cleaned.replace("\r", " ").replace("\n", " ").split()
+            for index, part in enumerate(parts):
+                if part.lower() == "authtoken" and index + 1 < len(parts):
+                    return parts[index + 1].strip().strip('"').strip("'")
+        if "authtoken:" in cleaned.lower():
+            for line in cleaned.splitlines():
+                stripped = line.strip()
+                if stripped.lower().startswith("authtoken:"):
+                    return stripped.split(":", 1)[1].strip().strip('"').strip("'")
+        return cleaned.splitlines()[0].strip().strip('"').strip("'")
+
     def _status_label(self, *, locale: str | None = None) -> str:
         labels = {
             "idle": self._t("panel.status.idle", locale=locale),
@@ -850,14 +1160,16 @@ class MobileTunnelPlugin(NekoPluginBase):
     def _process_exit_error(self, returncode: int | None) -> str:
         if self._tunnel_provider == "tailscale":
             return self._t("errors.tailscaleExited", returncode=returncode)
+        if self._tunnel_provider == "cpolar":
+            return self._t("errors.cpolarExited", returncode=returncode)
         return self._t("errors.cloudflaredExited", returncode=returncode)
 
     def _format_start_error(self, exc: Exception) -> str:
         if isinstance(exc, asyncio.TimeoutError):
             return self._t("errors.startTimeout")
         text = str(exc).strip()
-        if not text and self._last_cloudflared_lines:
-            text = self._last_cloudflared_lines[-1]
+        if not text and self._last_tunnel_process_lines:
+            text = self._last_tunnel_process_lines[-1]
         return text or self._t("errors.startFailed")
 
     def _qr_image_url(self, local_gateway_url: str | None) -> str | None:
