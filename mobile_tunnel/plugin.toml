@@ -5,7 +5,7 @@ description = "通过 Cloudflare、Tailscale 或 cpolar，为 N.E.K.O 提供受�
 short_description = "为 N.E.K.O 创建二维码手机访问入口。"
 keywords = ["手机", "二维码", "公网访问", "cloudflare", "trycloudflare", "cpolar", "tailscale", "tunnel"]
 passive = true
-version = "0.1.0"
+version = "0.2.0"
 entry = "plugin.plugins.mobile_tunnel:MobileTunnelPlugin"
 
 [plugin.author]
